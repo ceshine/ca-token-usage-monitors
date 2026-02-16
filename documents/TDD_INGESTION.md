@@ -31,8 +31,8 @@ Observed in local logs (2025-2026):
   - `total_token_usage`: cumulative totals.
   - `last_token_usage`: incremental usage for the latest step.
 - Duplicate `token_count` rows are frequent.
-- Verified boundary pattern: the first `token_count` after a `turn_context` often repeats the last cumulative total before that `turn_context`.
-- In filtered recent sessions (`--min-date 2026-01-01`), this boundary-repeat pattern was 100% in local data.
+  - Verified boundary pattern: the first `token_count` after a `turn_context` often repeats the last cumulative total before that `turn_context`.
+  - In filtered recent sessions (`--min-date 2026-01-01`), this boundary-repeat pattern was 100% in local data.
 - Some sessions contain multiple models in one file (model switch mid-session).
 - Some sessions have metadata but no token events.
 
@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS codex_session_metadata (
 ### 3.2 `codex_session_details`
 
 One deduplicated token event per unique cumulative total within a session.
+
+Field mapping:
+
+- `total_tokens_cumulative` comes from `payload.info.total_token_usage.total_tokens`.
+- `input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_output_tokens`, and `total_tokens` come from `payload.info.last_token_usage` (incremental usage for that event).
 
 Deduplication key:
 
@@ -87,7 +92,7 @@ CREATE TABLE IF NOT EXISTS codex_session_details (
 ### 4.1 Session identity
 
 1. Read file line-by-line (preserve line number).
-2. Take the first event with `type IN ("session_meta", "session_metadata")`.
+2. Take the first event with `type = "session_meta"`.
 3. Use `payload.id` as `session_id`.
 4. If missing, fail file ingestion with a descriptive error.
 
@@ -97,7 +102,6 @@ Maintain a mutable `current_model_context` while scanning:
 
 - On each `turn_context` event:
   - Update `current_model_code = payload.model` if present.
-  - Update `current_model_timestamp = event.timestamp`.
   - Update `current_turn_id = payload.turn_id`.
 - On each valid token event:
   - Assign `model_code = current_model_code`.
@@ -113,6 +117,9 @@ A row is a candidate token row only when:
 - `payload.info != null`
 - `payload.info.total_token_usage.total_tokens` exists
 - `payload.info.last_token_usage.total_tokens` exists
+- For each token field (`input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_output_tokens`, `total_tokens`):
+  - `payload.info.total_token_usage.<field>` exists
+  - `payload.info.last_token_usage.<field>` exists
 
 ### 4.4 Deduplication
 
@@ -137,19 +144,40 @@ Guardrail:
 ### 4.5 Monotonicity Assumption
 
 - We assume all models in these sessions share the same tokenizer domain.
-- Therefore `total_tokens_cumulative` is expected to be strictly increasing across unique token events, including across model switches.
-- Equal totals are treated as duplicates and deduplicated.
+- Equality is treated as duplication and handled in Section 4.4 (keep first occurrence).
+- After deduplication, `total_tokens_cumulative` must be strictly increasing across unique token events, including across model switches.
+- The first unique token event in a session has no prior row and is excluded from delta checks.
+
+Guardrails:
+
 - A decrease in cumulative totals is treated as a hard error and ingestion should fail for that file.
+- For each adjacent pair of deduped unique events (`prev`, `curr`), enforce:
+  - `curr.total_token_usage[field] - prev.total_token_usage[field] == curr.last_token_usage[field]`
+  - Fields checked: `input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_output_tokens`, `total_tokens`.
+- Any delta inconsistency is a hard error and ingestion should fail for that file.
 
 ## 5. Ingestion Workflow
 
 1. Discover files under `~/.codex/sessions/**/*.jsonl` (sorted path order).
-2. For each file, parse stream and build:
+2. For each file, compute `(session_file_path, file_size_bytes, file_mtime)`.
+3. Check `codex_ingestion_files`:
+   - If `(session_file_path, file_size_bytes, file_mtime)` is unchanged since the last successful ingestion, skip the file.
+   - If changed or unseen, continue.
+4. For changed/unseen files, parse `session_id` from the first `session_meta` event.
+5. Load per-session checkpoint from DB (`last_ts`, `last_total_tokens_cumulative`) from the latest ingested row for that `session_id`.
+6. Parse stream and build:
    - `session_metadata` row.
-   - `deduped_token_rows` list.
-3. Write in one transaction per file:
+   - `candidate_token_rows` filtered by checkpoint:
+     - If no checkpoint exists: include all candidate token rows.
+     - If checkpoint exists: include rows where
+       - `event_timestamp > last_ts`, or
+       - `event_timestamp == last_ts AND total_tokens_cumulative >= last_total_tokens_cumulative`.
+   - `deduped_token_rows` list (includes boundary row by design so dedupe can remove potential duplicate at resume point).
+   - Monotonicity + delta-consistency checks on the deduped unique-cumulative sequence.
+7. Write in one transaction per changed file:
    - Upsert `codex_session_metadata`.
    - Insert deduped rows into `codex_session_details` with conflict handling on `(session_id, total_tokens_cumulative)`.
+   - Upsert `codex_ingestion_files` with latest `file_size_bytes`, `file_mtime`, and `ingested_at`.
 
 Recommended SQL pattern:
 
@@ -157,23 +185,49 @@ Recommended SQL pattern:
 
 ## 6. Idempotency and Incremental Re-runs
 
-Add file-level bookkeeping:
+Use a hybrid strategy:
+
+- File-level change pruning via `codex_ingestion_files`.
+- Session-level tail ingestion via checkpoint from `codex_session_details`.
+
+File bookkeeping table:
 
 ```sql
 CREATE TABLE IF NOT EXISTS codex_ingestion_files (
     session_file_path VARCHAR PRIMARY KEY,
     file_size_bytes BIGINT NOT NULL,
     file_mtime TIMESTAMPTZ NOT NULL,
-    content_sha256 VARCHAR NOT NULL,
     ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
+File-change gate:
+
+- Skip file when both size and mtime match the last successful row in `codex_ingestion_files`.
+- Process file when unseen or changed.
+
+Checkpoint query:
+
+```sql
+SELECT
+  event_timestamp AS last_ts,
+  total_tokens_cumulative AS last_total_tokens_cumulative
+FROM codex_session_details
+WHERE session_id = ?
+ORDER BY event_timestamp DESC, total_tokens_cumulative DESC
+LIMIT 1;
+```
+
 Behavior:
 
-- On each run, compute `(path, size, mtime, sha256)`.
-- Skip file if same path and checksum already ingested.
-- If checksum changed, reprocess file and upsert data.
+- For changed files:
+  - If no checkpoint exists for a session, ingest from the beginning of the file.
+  - If checkpoint exists, skip older rows and only process tail rows where:
+    - `event_timestamp > last_ts`, or
+    - `event_timestamp == last_ts AND total_tokens_cumulative >= last_total_tokens_cumulative`.
+- The `>=` boundary is intentional: it re-includes the last ingested token row so stream-level dedupe can safely drop boundary duplicates.
+- This design assumes logs are append-only in practice (full-file rewrites are out of scope). Head truncation is acceptable because checkpointing is based on token event time + cumulative total, not file line number.
+- Idempotency is preserved by dedupe + DB conflict handling on `(session_id, total_tokens_cumulative)`.
 
 ## 7. Error Handling
 
@@ -184,16 +238,21 @@ Rules:
 - Skip token events with `info == null`.
 - Fail if a token event cannot be attributed to a known model (`current_model_code` missing).
 - Fail if cumulative totals decrease within a session file.
+- Fail if cumulative-total deltas are inconsistent with `last_token_usage` deltas on deduped unique events.
 - Fail if duplicate cumulative totals have conflicting token payload values.
 - If session ID missing, mark file as failed and continue other files.
 - Emit counters:
   - files_scanned
   - files_ingested
+  - files_skipped_unchanged
   - sessions_ingested
   - token_rows_raw
   - token_rows_deduped
   - token_rows_skipped_info_null
+  - token_rows_skipped_before_checkpoint
   - duplicate_rows_skipped
+  - monotonicity_errors
+  - delta_consistency_errors
   - parse_errors
 
 ## 8. Validation Queries
@@ -242,6 +301,33 @@ WHERE prev_total_tokens IS NOT NULL
 ```
 
 ```sql
+-- Delta check: cumulative total delta must equal per-row incremental total_tokens.
+WITH ordered AS (
+  SELECT
+    session_id,
+    event_timestamp,
+    event_line_number,
+    total_tokens_cumulative,
+    total_tokens,
+    LAG(total_tokens_cumulative) OVER (
+      PARTITION BY session_id
+      ORDER BY event_timestamp, event_line_number
+    ) AS prev_total_tokens
+  FROM codex_session_details
+)
+SELECT
+  session_id,
+  event_timestamp,
+  event_line_number,
+  prev_total_tokens,
+  total_tokens_cumulative,
+  total_tokens
+FROM ordered
+WHERE prev_total_tokens IS NOT NULL
+  AND (total_tokens_cumulative - prev_total_tokens) <> total_tokens;
+```
+
+```sql
 -- Compare raw vs dedup ratio
 SELECT
   COUNT(*) AS deduped_rows,
@@ -253,11 +339,11 @@ FROM codex_session_details;
 
 Suggested modules:
 
-- `src/coding_agent_token_monitor/ingestion/schemas.py`
-- `src/coding_agent_token_monitor/ingestion/parser.py`
-- `src/coding_agent_token_monitor/ingestion/dedupe.py`
-- `src/coding_agent_token_monitor/ingestion/repository.py`
-- `src/coding_agent_token_monitor/ingestion/service.py`
+- `src/codex_token_usage/ingestion/schemas.py`
+- `src/codex_token_usage/ingestion/parser.py`
+- `src/codex_token_usage/ingestion/dedupe.py`
+- `src/codex_token_usage/ingestion/repository.py`
+- `src/codex_token_usage/ingestion/service.py`
 
 Suggested stack:
 
