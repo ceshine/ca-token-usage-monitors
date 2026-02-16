@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import duckdb
 import orjson
+import pytest
 from typer.testing import CliRunner
 
 from codex_token_usage.cli import TYPER_APP
@@ -66,6 +68,219 @@ def test_ingest_command_returns_nonzero_when_any_file_fails(tmp_path: Path) -> N
     assert result.exit_code == 1
     assert "parse_errors=1" in result.stdout
     assert "failed_file=" in result.stdout
+
+
+def test_stats_command_prints_daily_and_overall_tables(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """CLI stats should print rich tables with aggregated token usage and cost values."""
+    database_path = tmp_path / "usage.duckdb"
+    _create_stats_database(
+        database_path,
+        [
+            {
+                "model_code": "gpt-5",
+                "event_timestamp": "2026-02-15T01:00:00+00:00",
+                "input_tokens": 100,
+                "cached_input_tokens": 40,
+                "output_tokens": 10,
+                "reasoning_output_tokens": 5,
+            },
+            {
+                "model_code": "gpt-5",
+                "event_timestamp": "2026-02-15T03:00:00+00:00",
+                "input_tokens": 50,
+                "cached_input_tokens": 0,
+                "output_tokens": 20,
+                "reasoning_output_tokens": 0,
+            },
+            {
+                "model_code": "o3",
+                "event_timestamp": "2026-02-16T02:00:00+00:00",
+                "input_tokens": 200,
+                "cached_input_tokens": 100,
+                "output_tokens": 50,
+                "reasoning_output_tokens": 10,
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        "codex_token_usage.stats.service.get_price_spec",
+        lambda: {
+            "gpt-5": {
+                "input_cost_per_token": 0.001,
+                "output_cost_per_token": 0.002,
+                "cache_read_input_token_cost": 0.0001,
+            },
+            "o3": {
+                "input_cost_per_token": 0.003,
+                "output_cost_per_token": 0.004,
+                "cache_read_input_token_cost": 0.0003,
+            },
+        },
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        TYPER_APP,
+        [
+            "stats",
+            "--database-path",
+            str(database_path),
+            "--timezone",
+            "UTC",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Daily Token Usage" in result.stdout
+    assert "Daily Aggregated Costs" in result.stdout
+    assert "Overall Token Usage by Model" in result.stdout
+    assert "gpt-5" in result.stdout
+    assert "o3" in result.stdout
+    assert "0.174000" in result.stdout
+    assert "0.530000" in result.stdout
+    assert "0.704000" in result.stdout
+
+
+def test_stats_command_handles_empty_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """CLI stats should print a no-data message when the details table is empty."""
+    database_path = tmp_path / "usage.duckdb"
+    _create_stats_database(database_path, [])
+
+    monkeypatch.setattr("codex_token_usage.stats.service.get_price_spec", lambda: {})
+
+    runner = CliRunner()
+    result = runner.invoke(TYPER_APP, ["stats", "--database-path", str(database_path)])
+
+    assert result.exit_code == 0
+    assert "No token usage events found in the database." in result.stdout
+
+
+def test_stats_command_since_filters_older_days(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """CLI stats should keep only rows on/after `--since`."""
+    database_path = tmp_path / "usage.duckdb"
+    _create_stats_database(
+        database_path,
+        [
+            {
+                "model_code": "gpt-5",
+                "event_timestamp": "2026-02-15T01:00:00+00:00",
+                "input_tokens": 100,
+                "cached_input_tokens": 40,
+                "output_tokens": 10,
+                "reasoning_output_tokens": 5,
+            },
+            {
+                "model_code": "o3",
+                "event_timestamp": "2026-02-16T02:00:00+00:00",
+                "input_tokens": 200,
+                "cached_input_tokens": 100,
+                "output_tokens": 50,
+                "reasoning_output_tokens": 10,
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        "codex_token_usage.stats.service.get_price_spec",
+        lambda: {
+            "gpt-5": {
+                "input_cost_per_token": 0.001,
+                "output_cost_per_token": 0.002,
+                "cache_read_input_token_cost": 0.0001,
+            },
+            "o3": {
+                "input_cost_per_token": 0.003,
+                "output_cost_per_token": 0.004,
+                "cache_read_input_token_cost": 0.0003,
+            },
+        },
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        TYPER_APP,
+        [
+            "stats",
+            "--database-path",
+            str(database_path),
+            "--timezone",
+            "UTC",
+            "--since",
+            "2026-02-16",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "2026-02-15" not in result.stdout
+    assert "2026-02-16" in result.stdout
+    assert "gpt-5" not in result.stdout
+    assert "o3" in result.stdout
+    assert "0.530000" in result.stdout
+
+
+def test_stats_command_since_rejects_invalid_date(tmp_path: Path) -> None:
+    """CLI stats should reject invalid `--since` values."""
+    database_path = tmp_path / "usage.duckdb"
+    _create_stats_database(database_path, [])
+
+    runner = CliRunner()
+    result = runner.invoke(
+        TYPER_APP,
+        [
+            "stats",
+            "--database-path",
+            str(database_path),
+            "--since",
+            "2026-02-99",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "Invalid --since value" in result.output
+
+
+def _create_stats_database(database_path: Path, rows: list[dict[str, object]]) -> None:
+    """Create a stats test database with a token details table."""
+    connection = duckdb.connect(str(database_path))
+    try:
+        _ = connection.execute(
+            """
+CREATE TABLE codex_session_details (
+    model_code VARCHAR,
+    event_timestamp TIMESTAMPTZ NOT NULL,
+    input_tokens BIGINT NOT NULL,
+    cached_input_tokens BIGINT NOT NULL,
+    output_tokens BIGINT NOT NULL,
+    reasoning_output_tokens BIGINT NOT NULL
+)
+            """
+        )
+        if rows:
+            _ = connection.executemany(
+                """
+INSERT INTO codex_session_details (
+    model_code,
+    event_timestamp,
+    input_tokens,
+    cached_input_tokens,
+    output_tokens,
+    reasoning_output_tokens
+)
+VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    [
+                        row["model_code"],
+                        row["event_timestamp"],
+                        row["input_tokens"],
+                        row["cached_input_tokens"],
+                        row["output_tokens"],
+                        row["reasoning_output_tokens"],
+                    ]
+                    for row in rows
+                ],
+            )
+    finally:
+        connection.close()
 
 
 def _session_meta_event() -> dict[str, object]:
