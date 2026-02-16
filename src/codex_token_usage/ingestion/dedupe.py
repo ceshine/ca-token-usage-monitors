@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
-from codex_token_usage.ingestion.errors import DeltaConsistencyError, DuplicateConflictError, MonotonicityError
-from codex_token_usage.ingestion.schemas import DedupeResult, TokenEventRow, TokenUsageValues
+from .errors import DeltaConsistencyError, DuplicateConflictError, MonotonicityError
+from .schemas import DedupeResult, TokenEventRow, TokenUsageValues
+
+LOGGER = logging.getLogger(__name__)
 
 
 def dedupe_and_validate_token_rows(session_file_path: Path, token_rows: list[TokenEventRow]) -> DedupeResult:
@@ -22,10 +25,12 @@ def dedupe_and_validate_token_rows(session_file_path: Path, token_rows: list[Tok
             deduped_rows.append(row)
             continue
 
-        if not _rows_have_matching_payload(existing_row, row):
+        if not _rows_have_matching_payload(existing_row, row, session_file_path):
             raise DuplicateConflictError(
-                f"Conflicting duplicate total_tokens_cumulative={cumulative} in {session_file_path}: "
-                f"line {existing_row.event_line_number} vs line {row.event_line_number}."
+                (
+                    f"Conflicting duplicate total_tokens_cumulative={cumulative} in {session_file_path}: "
+                    f"line {existing_row.event_line_number} vs line {row.event_line_number}."
+                )
             )
         duplicate_rows_skipped += 1
 
@@ -55,9 +60,11 @@ def _validate_monotonicity_and_deltas(session_file_path: Path, token_rows: list[
     for current in token_rows[1:]:
         if current.total_tokens_cumulative <= previous.total_tokens_cumulative:
             raise MonotonicityError(
-                f"Cumulative total decreased or stalled in {session_file_path}: "
-                f"line {previous.event_line_number} ({previous.total_tokens_cumulative}) -> "
-                f"line {current.event_line_number} ({current.total_tokens_cumulative})."
+                (
+                    f"Cumulative total decreased or stalled in {session_file_path}: "
+                    f"line {previous.event_line_number} ({previous.total_tokens_cumulative}) -> "
+                    f"line {current.event_line_number} ({current.total_tokens_cumulative})."
+                )
             )
 
         _validate_row_delta(session_file_path, previous, current)
@@ -79,15 +86,28 @@ def _validate_row_delta(session_file_path: Path, previous: TokenEventRow, curren
         actual_delta = _usage_field(current.last_usage, field_name)
         if expected_delta != actual_delta:
             raise DeltaConsistencyError(
-                f"Delta mismatch for {field_name} in {session_file_path}: "
-                f"line {previous.event_line_number} -> line {current.event_line_number}, "
-                f"expected {expected_delta}, got {actual_delta}."
+                (
+                    f"Delta mismatch for {field_name} in {session_file_path}: "
+                    f"line {previous.event_line_number} -> line {current.event_line_number}, "
+                    f"expected {expected_delta}, got {actual_delta}."
+                )
             )
 
 
-def _rows_have_matching_payload(left: TokenEventRow, right: TokenEventRow) -> bool:
+def _rows_have_matching_payload(left: TokenEventRow, right: TokenEventRow, session_file_path: Path) -> bool:
     """Return True when duplicate rows carry identical token payload values."""
-    return left.total_usage == right.total_usage and left.last_usage == right.last_usage
+    if left.total_usage == right.total_usage:
+        if left.last_usage != right.last_usage:
+            LOGGER.info(
+                "Duplicates row with same total_usage but different last_usage.\nFile:%s\nLeft: (line %d) %s\nRight: (line %d) %s ",
+                session_file_path,
+                left.event_line_number,
+                left.last_usage,
+                right.event_line_number,
+                right.last_usage,
+            )
+        return True
+    return False
 
 
 def _usage_field(usage: TokenUsageValues, field_name: str) -> int:

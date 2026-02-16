@@ -40,8 +40,10 @@ def parse_session_identity(session_file_path: Path) -> SessionIdentity:
         cwd = payload.get("cwd")
         if cwd is not None and not isinstance(cwd, str):
             raise ParseError(
-                f"Invalid session_meta.payload.cwd type in {session_file_path} at line {line_number}: "
-                f"expected str or null, got {type(cwd).__name__}."
+                (
+                    f"Invalid session_meta.payload.cwd type in {session_file_path} at line {line_number}: "
+                    f"expected str or null, got {type(cwd).__name__}."
+                )
             )
         return SessionIdentity(session_id=session_id, session_timestamp=timestamp, cwd=cwd)
 
