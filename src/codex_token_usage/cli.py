@@ -107,8 +107,7 @@ def stats_command(
     _configure_logging(verbose)
     if ingest:
         counters = _run_ingestion(database_path=database_path, sessions_root=sessions_root)
-        if verbose:
-            _emit_summary(counters)
+        _emit_summary(counters)
         if counters.failed_files:
             raise typer.Exit(code=1)
     elif not database_path.exists():
@@ -141,6 +140,7 @@ def _configure_logging(verbose: bool) -> None:
 
 def _emit_summary(counters: IngestionCounters) -> None:
     """Print ingestion counters to stdout."""
+    typer.echo("\nSummary:")
     summary_lines = [
         f"files_scanned={counters.files_scanned}",
         f"files_ingested={counters.files_ingested}",

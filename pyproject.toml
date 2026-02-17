@@ -24,7 +24,7 @@ reportCallInDefaultInitializer = false
 
 [project.scripts]
 codex-token-usage = "codex_token_usage.cli:module_cli_entry_point"
-gemini-token-usage = "gemini_token_usage.__main__:main"
+gemini-token-usage = "gemini_token_usage.cli:module_cli_entry_point"
 
 [build-system]
 requires = ["hatchling"]

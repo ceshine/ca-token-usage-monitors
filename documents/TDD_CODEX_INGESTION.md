@@ -1,6 +1,7 @@
 # Token Ingestion Technical Design (Codex Sessions -> DuckDB)
 
 Created: 2026-02-16
+Completed: 2026-02-16
 
 ## 1. Scope
 
