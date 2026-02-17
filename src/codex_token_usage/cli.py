@@ -29,6 +29,21 @@ def main() -> None:
     """Root CLI callback."""
 
 
+def _run_ingestion(database_path: Path, sessions_root: Path) -> IngestionCounters:
+    """Run ingestion and return operation counters."""
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+
+    LOGGER.info("Start ingesting Codex session files.")
+    repository = IngestionRepository(database_path)
+    try:
+        service = IngestionService(repository=repository, sessions_root=sessions_root)
+        ingest_stats = service.ingest()
+        LOGGER.info("Finished ingesting Codex session files.")
+        return ingest_stats
+    finally:
+        repository.close()
+
+
 @TYPER_APP.command("ingest")
 def ingest_command(
     database_path: Path = typer.Option(
@@ -45,17 +60,12 @@ def ingest_command(
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable info-level logging."),
 ) -> None:
-    """Ingest Codex session token usage into DuckDB."""
+    """Ingest Codex session token usage into DuckDB.
+
+    Note: this command is mostly for internal debugging purposes.
+    """
     _configure_logging(verbose)
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-
-    repository = IngestionRepository(database_path)
-    try:
-        service = IngestionService(repository=repository, sessions_root=sessions_root)
-        counters = service.ingest()
-    finally:
-        repository.close()
-
+    counters = _run_ingestion(database_path=database_path, sessions_root=sessions_root)
     _emit_summary(counters)
     if counters.failed_files:
         raise typer.Exit(code=1)
@@ -68,6 +78,17 @@ def stats_command(
         "--database-path",
         "-d",
         help="DuckDB file path for ingestion state and token details.",
+    ),
+    ingest: bool = typer.Option(
+        False,
+        "--ingest/--no-ingest",
+        help="Ingest session logs into DuckDB before computing statistics.",
+    ),
+    sessions_root: Path = typer.Option(
+        DEFAULT_SESSIONS_ROOT,
+        "--sessions-root",
+        "-s",
+        help="Root directory containing Codex JSONL session files (used with --ingest).",
     ),
     timezone: str | None = typer.Option(
         None,
@@ -84,7 +105,13 @@ def stats_command(
 ) -> None:
     """Aggregate and print daily token usage and costs from DuckDB."""
     _configure_logging(verbose)
-    if not database_path.exists():
+    if ingest:
+        counters = _run_ingestion(database_path=database_path, sessions_root=sessions_root)
+        if verbose:
+            _emit_summary(counters)
+        if counters.failed_files:
+            raise typer.Exit(code=1)
+    elif not database_path.exists():
         raise typer.BadParameter(f"Database file not found: {database_path}")
 
     resolved_timezone = _parse_timezone(timezone)

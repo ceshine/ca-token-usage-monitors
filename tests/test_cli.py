@@ -141,6 +141,56 @@ def test_stats_command_prints_daily_and_overall_tables(tmp_path: Path, monkeypat
     assert "0.704000" in result.stdout
 
 
+def test_stats_command_with_ingest_ingests_then_reports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CLI stats should support ingesting logs before rendering statistics."""
+    sessions_root = tmp_path / "sessions"
+    sessions_root.mkdir(parents=True)
+    session_file = sessions_root / "session-1.jsonl"
+    _write_jsonl(
+        session_file,
+        [
+            _session_meta_event(),
+            _turn_context_event("2026-02-15T00:00:01Z", "gpt-5", "00000000-0000-0000-0000-000000000010"),
+            _token_event("2026-02-15T00:00:02Z", total=10, last=10),
+        ],
+    )
+
+    database_path = tmp_path / "usage.duckdb"
+    monkeypatch.setattr(
+        "codex_token_usage.stats.service.get_price_spec",
+        lambda: {
+            "gpt-5": {
+                "input_cost_per_token": 0.001,
+                "output_cost_per_token": 0.002,
+                "cache_read_input_token_cost": 0.0001,
+            }
+        },
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        TYPER_APP,
+        [
+            "stats",
+            "--database-path",
+            str(database_path),
+            "--sessions-root",
+            str(sessions_root),
+            "--ingest",
+            "--timezone",
+            "UTC",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "files_ingested=1" in result.stdout
+    assert "Daily Token Usage" in result.stdout
+    assert "gpt-5" in result.stdout
+
+
 def test_stats_command_handles_empty_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """CLI stats should print a no-data message when the details table is empty."""
     database_path = tmp_path / "usage.duckdb"
