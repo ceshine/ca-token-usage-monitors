@@ -27,6 +27,34 @@ uv sync --frozen
 
 ## Codex Usage
 
+### Ingest command
+
+Ingest Codex session logs into the local DuckDB database:
+
+```bash
+uv run codex-token-usage ingest
+```
+
+Useful options:
+
+- `--database-path`, `-d`: Path to DuckDB file (default: `data/token_usage.duckdb`).
+- `--sessions-root`, `-s`: Codex sessions directory (default: `~/.codex/sessions`).
+- `--verbose`, `-v`: Enable info-level logs.
+
+Examples:
+
+```bash
+# Ingest from default Codex sessions path
+uv run codex-token-usage ingest
+
+# Ingest from a custom sessions path and database
+uv run codex-token-usage ingest \
+  --sessions-root /path/to/.codex/sessions \
+  --database-path data/token_usage.duckdb
+```
+
+After ingestion, the command prints an ingestion summary and token usage statistics for the last 7 days.
+
 ### Stats command
 
 Run daily token/cost statistics from the local DuckDB database:
@@ -37,9 +65,7 @@ uv run codex-token-usage stats
 
 Useful options:
 
-- `--ingest`: Ingest session logs before computing stats.
 - `--database-path`, `-d`: Path to DuckDB file (default: `data/token_usage.duckdb`).
-- `--sessions-root`, `-s`: Codex sessions directory (used with `--ingest`, default: `~/.codex/sessions`).
 - `--timezone`, `-tz`: Timezone for daily grouping, e.g. `UTC` or `America/New_York`.
 - `--since`: Include usage on/after a date (`YYYY-MM-DD`).
 - `--verbose`, `-v`: Enable info-level logs.
@@ -47,16 +73,8 @@ Useful options:
 Examples:
 
 ```bash
-# Stats from existing database
+# Stats from existing database (read-only)
 uv run codex-token-usage stats
-
-# Ingest latest sessions first, then show stats
-uv run codex-token-usage stats --ingest
-
-# Use a custom sessions path and custom database
-uv run codex-token-usage stats --ingest \
-  --sessions-root /path/to/.codex/sessions \
-  --database-path data/token_usage.duckdb
 
 # Filter by date and timezone
 uv run codex-token-usage stats --since 2026-01-01 --timezone America/New_York
@@ -91,54 +109,83 @@ The `outfile` setting above (`".gemini/telemetry.log"`) tells the Gemini CLI to 
 
 Alternatively, you can set `outfile` to an absolute path (e.g., `"~/.gemini/telemetry.log"`) to aggregate logs from all projects into a single file. However, be aware that this makes it difficult to attribute token usage to specific projects.
 
-### Stats command
+### Ingest command
 
-Run the tool by providing the path to your project directory or a specific log file:
+Ingest Gemini usage events into the local DuckDB database. In most cases, you no longer need to run `preprocess` manually; `ingest` preprocesses selected input paths automatically.
 
 ```bash
-uv run gemini-token-usage stats [OPTIONS] LOG_FILE_PATH
+uv run gemini-token-usage ingest [OPTIONS] [INPUT_PATHS]...
 ```
 
-Required Argument:
+Arguments:
 
-*   `LOG_FILE_PATH`: The path to the directory containing the logs or a specific log file (`.log` or `.jsonl`).
-    *   If a **directory** is provided, the tool automatically searches for `telemetry.log` (to convert) or `telemetry.jsonl` (to analyze) within that directory or its `.gemini` subdirectory.
-    *   If a **file** is provided, it processes that specific file.
+*   `INPUT_PATHS`: Optional directories or `telemetry.jsonl` files to ingest.
+    *   If a **directory** is provided, the tool searches for `telemetry.log` / `telemetry.jsonl` in that directory or its `.gemini` subdirectory.
+    *   If a **telemetry.log** file is found, it is converted to `telemetry.jsonl` before ingestion.
+    *   If omitted, ingestion can still run with `--all-active` to ingest tracked active sources from the database.
 
 Useful options:
 
-*   `-tz`, `--timezone TEXT`: Set the timezone for daily aggregation (e.g., `Asia/Tokyo`, `America/New_York`). Defaults to the system's local time.
-*   `--enable-archiving`: If set, moves processed log files to `/tmp` to save space. **Only use this if no Gemini CLI instance is currently running** to avoid locking issues.
-*   `--log-simplify-level INTEGER`: Controls how much the logs are simplified to save space (Default: 1).
-    *   `0`: No simplification.
-    *   `1`: Default simplification.
-    *   `2`: Trim fields.
-    *   `3`: Trim attributes.
+*   `--all-active`: Include all currently active tracked sources from the database.
+*   `--auto-deactivate`: With `--all-active`, automatically mark missing active sources as inactive.
+*   `-d`, `--database-path PATH`: DuckDB file path (default: `data/token_usage.duckdb`).
+*   `--enable-archiving`: Archive raw `telemetry.log` files when preprocessing selected input paths.
+*   `--log-simplify-level INTEGER`: Simplification level used while preprocessing `telemetry.log` files (0-3, default: 1).
 
 #### Examples
 
-**Analyze the current directory (uses default timezone):**
+**Ingest from the current project directory:**
 
 ```bash
-uv run gemini-token-usage stats .
+uv run gemini-token-usage ingest .
 ```
 
-**Recommended: Use the highest level of simplification and pruning if you just want token usage statistics:**
+**Ingest multiple project paths:**
 
 ```bash
-uv run gemini-token-usage stats . --log-simplify-level 3
+uv run gemini-token-usage ingest /path/to/project-a /path/to/project-b
 ```
 
-**Analyze with a specific timezone:**
+**Ingest all active tracked sources and auto-deactivate missing ones:**
 
 ```bash
-uv run gemini-token-usage stats . -tz "Asia/Taipei"
+uv run gemini-token-usage ingest --all-active --auto-deactivate
 ```
 
-**Analyze a specific converted log file:**
+**Use a custom database path:**
 
 ```bash
-uv run gemini-token-usage stats .gemini/telemetry.jsonl
+uv run gemini-token-usage ingest . --database-path data/token_usage.duckdb
+```
+
+After ingestion, the command prints a summary and statistics for the last 7 days.
+
+### Stats command
+
+Aggregate and print daily Gemini token usage and costs from the local DuckDB database:
+
+```bash
+uv run gemini-token-usage stats [OPTIONS]
+```
+
+Useful options:
+
+*   `-d`, `--database-path PATH`: DuckDB file path (default: `data/token_usage.duckdb`).
+*   `-tz`, `--timezone TEXT`: Timezone for daily grouping (e.g., `UTC`, `America/New_York`). Defaults to local system time.
+*   `--since TEXT`: Include only usage on/after a date (`YYYY-MM-DD`).
+
+#### Examples
+
+**Show stats from the default database:**
+
+```bash
+uv run gemini-token-usage stats
+```
+
+**Filter by date and timezone:**
+
+```bash
+uv run gemini-token-usage stats --since 2026-01-01 --timezone America/New_York
 ```
 
 ### Simplify command (Manually Simplify Logs)
@@ -190,7 +237,7 @@ The `--enable-archiving` option moves processed log files to `/tmp` to save spac
 **Example:**
 
 ```bash
-uv run gemini-token-usage . --enable-archiving
+uv run gemini-token-usage ingest . --enable-archiving
 ```
 
 ## Internal Workflows

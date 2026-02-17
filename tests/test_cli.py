@@ -141,11 +141,11 @@ def test_stats_command_prints_daily_and_overall_tables(tmp_path: Path, monkeypat
     assert "0.704000" in result.stdout
 
 
-def test_stats_command_with_ingest_ingests_then_reports(
+def test_ingest_command_prints_last_7_days_stats(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CLI stats should support ingesting logs before rendering statistics."""
+    """CLI ingest should render summary and 7-day statistics output."""
     sessions_root = tmp_path / "sessions"
     sessions_root.mkdir(parents=True)
     session_file = sessions_root / "session-1.jsonl"
@@ -174,19 +174,17 @@ def test_stats_command_with_ingest_ingests_then_reports(
     result = runner.invoke(
         TYPER_APP,
         [
-            "stats",
+            "ingest",
             "--database-path",
             str(database_path),
             "--sessions-root",
             str(sessions_root),
-            "--ingest",
-            "--timezone",
-            "UTC",
         ],
     )
 
     assert result.exit_code == 0
     assert "files_ingested=1" in result.stdout
+    assert "Statistics (last 7 days):" in result.stdout
     assert "Daily Token Usage" in result.stdout
     assert "gpt-5" in result.stdout
 

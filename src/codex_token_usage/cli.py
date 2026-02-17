@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -60,13 +60,11 @@ def ingest_command(
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable info-level logging."),
 ) -> None:
-    """Ingest Codex session token usage into DuckDB.
-
-    Note: this command is mostly for internal debugging purposes.
-    """
+    """Ingest Codex session token usage into DuckDB."""
     _configure_logging(verbose)
     counters = _run_ingestion(database_path=database_path, sessions_root=sessions_root)
     _emit_summary(counters)
+    _emit_last_7_days_stats(database_path=database_path, console=Console())
     if counters.failed_files:
         raise typer.Exit(code=1)
 
@@ -78,17 +76,6 @@ def stats_command(
         "--database-path",
         "-d",
         help="DuckDB file path for ingestion state and token details.",
-    ),
-    ingest: bool = typer.Option(
-        False,
-        "--ingest/--no-ingest",
-        help="Ingest session logs into DuckDB before computing statistics.",
-    ),
-    sessions_root: Path = typer.Option(
-        DEFAULT_SESSIONS_ROOT,
-        "--sessions-root",
-        "-s",
-        help="Root directory containing Codex JSONL session files (used with --ingest).",
     ),
     timezone: str | None = typer.Option(
         None,
@@ -105,27 +92,12 @@ def stats_command(
 ) -> None:
     """Aggregate and print daily token usage and costs from DuckDB."""
     _configure_logging(verbose)
-    if ingest:
-        counters = _run_ingestion(database_path=database_path, sessions_root=sessions_root)
-        _emit_summary(counters)
-        if counters.failed_files:
-            raise typer.Exit(code=1)
-    elif not database_path.exists():
+    if not database_path.exists():
         raise typer.BadParameter(f"Database file not found: {database_path}")
 
     resolved_timezone = _parse_timezone(timezone)
     since_date = _parse_since_date(since)
-    repository: StatsRepository | None = None
-    try:
-        repository = StatsRepository(database_path)
-        service = StatsService(repository=repository, timezone=resolved_timezone, since=since_date)
-        report = service.collect_daily_statistics()
-    except (StatsRepositoryError, RuntimeError) as exc:
-        raise typer.BadParameter(str(exc)) from exc
-    finally:
-        if repository is not None:
-            repository.close()
-
+    report = _collect_stats_report(database_path=database_path, timezone=resolved_timezone, since=since_date)
     render_daily_usage_statistics(report, Console())
 
 
@@ -160,6 +132,33 @@ def _emit_summary(counters: IngestionCounters) -> None:
 
     for failed_file in counters.failed_files:
         typer.echo(f"failed_file={failed_file}")
+
+
+def _emit_last_7_days_stats(database_path: Path, console: Console) -> None:
+    """Render usage statistics from ingested events over the last seven days."""
+    today = datetime.now().date()
+    since_date = today - timedelta(days=6)
+    report = _collect_stats_report(database_path=database_path, timezone=None, since=since_date)
+    typer.echo("\nStatistics (last 7 days):")
+    render_daily_usage_statistics(report=report, console=console)
+
+
+def _collect_stats_report(
+    database_path: Path,
+    timezone: ZoneInfo | None,
+    since: date | None,
+):
+    """Collect daily stats report from database events with optional date filtering."""
+    repository: StatsRepository | None = None
+    try:
+        repository = StatsRepository(database_path)
+        service = StatsService(repository=repository, timezone=timezone, since=since)
+        return service.collect_daily_statistics()
+    except (StatsRepositoryError, RuntimeError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        if repository is not None:
+            repository.close()
 
 
 def _parse_timezone(timezone: str | None) -> ZoneInfo | None:
