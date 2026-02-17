@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,7 @@ from .preprocessing.convert import run_log_conversion
 from .preprocessing.metadata import ensure_project_metadata_line
 from .preprocessing.resolve_input import resolve_preprocess_input
 from .preprocessing.simplify import run_log_simplification
+from .stats.repository import StatsRepository, StatsRepositoryError
 from .stats.render import render_daily_usage_statistics
 from .stats.service import StatsService
 
@@ -169,6 +171,51 @@ def ingest_command(
     _emit_ingest_summary(counters)
 
 
+@TYPER_APP.command("stats")
+def stats_command(
+    database_path: Path = typer.Option(
+        DEFAULT_DATABASE_PATH,
+        "--database-path",
+        "-d",
+        help="DuckDB file path for ingestion state and usage events.",
+    ),
+    timezone: str | None = typer.Option(
+        None,
+        "--timezone",
+        "-tz",
+        help="Timezone to use for daily stats (e.g., 'UTC', 'America/New_York'). Defaults to local system time.",
+    ),
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="Include only usage on/after this date (YYYY-MM-DD).",
+    ),
+) -> None:
+    """Aggregate and print daily token usage and costs from DuckDB."""
+    _configure_logging()
+    if not database_path.exists():
+        raise typer.BadParameter(f"Database file not found: {database_path}")
+
+    timezone_info = _parse_timezone(timezone)
+    since_date = _parse_since_date(since)
+    repository: StatsRepository | None = None
+    try:
+        repository = StatsRepository(database_path)
+        events = repository.fetch_token_events()
+        if since_date is not None:
+            events = [
+                event for event in events if _resolve_event_date(event.event_timestamp, timezone_info) >= since_date
+            ]
+        report = StatsService().collect_daily_statistics_from_events(events=events, timezone=timezone_info)
+    except StatsRepositoryError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        if repository is not None:
+            repository.close()
+
+    render_daily_usage_statistics(report=report, console=Console())
+
+
 def _run_preprocessing(
     log_file_path: Path,
     enable_archiving: bool,
@@ -219,6 +266,22 @@ def _parse_timezone(timezone: str | None) -> ZoneInfo | None:
         return ZoneInfo(timezone)
     except Exception as exc:
         raise typer.BadParameter(f"Invalid timezone: {timezone}.") from exc
+
+
+def _parse_since_date(since: str | None) -> date | None:
+    """Parse `--since` value into a date."""
+    if since is None:
+        return None
+    try:
+        return date.fromisoformat(since)
+    except ValueError as exc:
+        raise typer.BadParameter(f"Invalid --since value: {since}. Expected YYYY-MM-DD.") from exc
+
+
+def _resolve_event_date(event_timestamp: datetime, timezone: ZoneInfo | None) -> date:
+    """Resolve event date in selected timezone (or local system timezone)."""
+    normalized = event_timestamp if event_timestamp.tzinfo is not None else event_timestamp.replace(tzinfo=UTC)
+    return normalized.astimezone(timezone).date()
 
 
 def _emit_ingest_summary(counters: IngestionCounters) -> None:

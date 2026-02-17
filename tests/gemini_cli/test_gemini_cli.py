@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 import json
+from uuid import UUID
 
 import orjson
 from typer.testing import CliRunner
 
 from gemini_token_usage.cli import TYPER_APP
+from gemini_token_usage.ingestion.repository import IngestionRepository
+from gemini_token_usage.ingestion.schemas import UsageEventRow
 
 
 def test_preprocess_converts_log_directory_without_stats(tmp_path: Path) -> None:
@@ -88,13 +92,110 @@ def test_preprocess_with_stats_prints_statistics_tables(tmp_path: Path, monkeypa
     assert "Overall Token Usage by Model" in result.stdout
 
 
-def test_stats_command_is_not_available() -> None:
-    """The old `stats` command should be removed."""
-    runner = CliRunner()
-    result = runner.invoke(TYPER_APP, ["stats"])
+def test_stats_command_prints_statistics_from_database(tmp_path: Path, monkeypatch) -> None:
+    """`stats` should read events from DuckDB and render usage tables."""
+    database_path = tmp_path / "usage.duckdb"
+    repository = IngestionRepository(database_path)
+    try:
+        repository.ensure_schema()
+        repository.insert_usage_events(
+            [
+                UsageEventRow(
+                    project_id=UUID("00000000-0000-0000-0000-000000000001"),
+                    event_timestamp=datetime(2026, 2, 17, 0, 0, tzinfo=UTC),
+                    model_code="gemini-2.5-pro",
+                    input_tokens=100,
+                    cached_input_tokens=40,
+                    output_tokens=10,
+                    thoughts_tokens=5,
+                    total_tokens=115,
+                )
+            ]
+        )
+    finally:
+        repository.close()
 
-    assert result.exit_code != 0
-    assert "No such command" in result.output
+    monkeypatch.setattr(
+        "gemini_token_usage.stats.service.get_price_spec",
+        lambda: {
+            "gemini-2.5-pro": {
+                "input_cost_per_token": 0.001,
+                "output_cost_per_token": 0.002,
+                "cache_read_input_token_cost": 0.0001,
+            }
+        },
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(TYPER_APP, ["stats", "--database-path", str(database_path), "--timezone", "UTC"])
+
+    assert result.exit_code == 0
+    assert "Daily Token Usage" in result.stdout
+    assert "Daily Aggregated Costs" in result.stdout
+    assert "Overall Token Usage by Model" in result.stdout
+
+
+def test_stats_command_since_filters_older_dates(tmp_path: Path, monkeypatch) -> None:
+    """`stats --since` should exclude usage rows before the given date."""
+    database_path = tmp_path / "usage.duckdb"
+    repository = IngestionRepository(database_path)
+    try:
+        repository.ensure_schema()
+        repository.insert_usage_events(
+            [
+                UsageEventRow(
+                    project_id=UUID("00000000-0000-0000-0000-000000000001"),
+                    event_timestamp=datetime(2026, 2, 16, 0, 0, tzinfo=UTC),
+                    model_code="gemini-2.5-pro",
+                    input_tokens=10,
+                    cached_input_tokens=1,
+                    output_tokens=5,
+                    thoughts_tokens=1,
+                    total_tokens=17,
+                ),
+                UsageEventRow(
+                    project_id=UUID("00000000-0000-0000-0000-000000000001"),
+                    event_timestamp=datetime(2026, 2, 17, 0, 0, tzinfo=UTC),
+                    model_code="gemini-2.5-pro",
+                    input_tokens=20,
+                    cached_input_tokens=2,
+                    output_tokens=6,
+                    thoughts_tokens=2,
+                    total_tokens=30,
+                ),
+            ]
+        )
+    finally:
+        repository.close()
+
+    monkeypatch.setattr(
+        "gemini_token_usage.stats.service.get_price_spec",
+        lambda: {
+            "gemini-2.5-pro": {
+                "input_cost_per_token": 0.001,
+                "output_cost_per_token": 0.002,
+                "cache_read_input_token_cost": 0.0001,
+            }
+        },
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        TYPER_APP,
+        [
+            "stats",
+            "--database-path",
+            str(database_path),
+            "--timezone",
+            "UTC",
+            "--since",
+            "2026-02-17",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "2026-02-16" not in result.stdout
+    assert "2026-02-17" in result.stdout
 
 
 def _write_concatenated_log(path: Path, rows: list[dict[str, object]]) -> None:

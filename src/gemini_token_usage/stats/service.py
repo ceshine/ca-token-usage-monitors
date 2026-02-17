@@ -28,11 +28,8 @@ class StatsService:
         log_file_path: Path,
         timezone: ZoneInfo | None = None,
     ) -> DailyUsageStatistics:
-        """Aggregate token usage and costs by day and model."""
-        usage_by_model_day: dict[tuple[str, date], UsageStats] = defaultdict(UsageStats)
-        daily_costs: dict[date, float] = defaultdict(float)
-        overall_usage: dict[str, UsageStats] = defaultdict(UsageStats)
-        total_events = 0
+        """Aggregate token usage and costs by day and model from JSONL."""
+        events: list[TokenUsageEvent] = []
         encountered_errors = False
 
         try:
@@ -46,27 +43,50 @@ class StatsService:
                 if event is None:
                     continue
 
-                event_date = _resolve_event_date(event.event_timestamp, timezone)
-                event_cost = calculate_event_cost(event, self._price_spec)
-
-                day_stats = usage_by_model_day[(event.model_code, event_date)]
-                _accumulate_usage_stats(day_stats, event, event_cost)
-
-                model_stats = overall_usage[event.model_code]
-                _accumulate_usage_stats(model_stats, event, event_cost)
-
-                daily_costs[event_date] += event_cost
-                total_events += 1
+                events.append(event)
         except Exception as exc:
             encountered_errors = True
             LOGGER.error("Error while processing %s: %s", log_file_path, exc)
+
+        report = self.collect_daily_statistics_from_events(events=events, timezone=timezone)
+        return DailyUsageStatistics(
+            usage_by_model_day=report.usage_by_model_day,
+            daily_costs=report.daily_costs,
+            overall_usage=report.overall_usage,
+            total_events=report.total_events,
+            encountered_errors=encountered_errors,
+        )
+
+    def collect_daily_statistics_from_events(
+        self,
+        events: list[TokenUsageEvent],
+        timezone: ZoneInfo | None = None,
+    ) -> DailyUsageStatistics:
+        """Aggregate token usage and costs by day and model from parsed events."""
+        usage_by_model_day: dict[tuple[str, date], UsageStats] = defaultdict(UsageStats)
+        daily_costs: dict[date, float] = defaultdict(float)
+        overall_usage: dict[str, UsageStats] = defaultdict(UsageStats)
+        total_events = 0
+
+        for event in events:
+            event_date = _resolve_event_date(event.event_timestamp, timezone)
+            event_cost = calculate_event_cost(event, self._price_spec)
+
+            day_stats = usage_by_model_day[(event.model_code, event_date)]
+            _accumulate_usage_stats(day_stats, event, event_cost)
+
+            model_stats = overall_usage[event.model_code]
+            _accumulate_usage_stats(model_stats, event, event_cost)
+
+            daily_costs[event_date] += event_cost
+            total_events += 1
 
         return DailyUsageStatistics(
             usage_by_model_day=dict(usage_by_model_day),
             daily_costs=dict(daily_costs),
             overall_usage=dict(overall_usage),
             total_events=total_events,
-            encountered_errors=encountered_errors,
+            encountered_errors=False,
         )
 
 
