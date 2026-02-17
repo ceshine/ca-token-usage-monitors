@@ -1,6 +1,7 @@
 # Token Ingestion Technical Design (Gemini JSONL -> DuckDB)
 
 Created: 2026-02-17
+Completed: 2026-02-17
 
 ## 1. Scope
 
@@ -62,7 +63,13 @@ First line must be a JSON object with:
 
 ## 3.3 Simplify responsibilities
 
-`simplify` must preserve line 1 metadata exactly and only simplify event lines after metadata.
+`simplify` must enforce metadata placement and simplify only event lines:
+
+1. Line 1 must be valid project metadata.
+2. Metadata does not need byte-level preservation when rewritten.
+3. `simplify_record` receives `line_number`.
+4. If a record with `record_type == "gemini_cli.project_metadata"` appears at line > 1, fail fast.
+5. Only non-metadata records after line 1 are subject to simplification rules.
 
 ## 4. CLI Contract
 
@@ -237,13 +244,13 @@ Append-only guardrails:
 3. Update preprocessing:
    - add metadata utilities in `src/gemini_token_usage/preprocessing/`.
    - update conversion flow to ensure metadata first line.
-   - update simplify flow to preserve metadata first line.
+   - update simplify flow to validate metadata placement with `line_number`.
 4. Add tests:
    - `tests/gemini_ingestion/test_repository.py`
    - `tests/gemini_ingestion/test_parser.py`
    - `tests/gemini_ingestion/test_service.py`
    - `tests/gemini_cli/test_gemini_ingest_cli.py`
-   - preprocessing tests for metadata insertion/preservation.
+   - preprocessing tests for metadata insertion and metadata-placement validation.
 
 ## 10. Test Matrix (Minimum)
 
@@ -260,3 +267,4 @@ Append-only guardrails:
 11. Idempotent rerun skips unchanged files.
 12. Timestamp-tail ingestion inserts only new events.
 13. Checkpoint boundary includes same-timestamp rows with model-code tie-break and remains idempotent on rerun.
+14. Simplify fails when `project_metadata` appears after line 1.

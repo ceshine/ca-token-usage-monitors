@@ -7,9 +7,11 @@ import logging
 from os import SEEK_END
 from pathlib import Path
 import shutil
+from uuid import uuid4
 
 import orjson
 
+from .metadata import ProjectMetadata, build_metadata_line, ensure_project_metadata_line
 from .simplify import simplify_record
 
 LOGGER = logging.getLogger(__name__)
@@ -70,11 +72,10 @@ def convert_log_file(
     """Convert concatenated JSON objects from `.log` to newline-delimited `.jsonl`."""
     converted_count = 0
     skipped_count = 0
-    write_mode = "ab" if last_timestamp else "wb"
 
     with (
         input_file_path.open("r", encoding="utf-8") as input_handle,
-        output_file_path.open(write_mode) as output_handle,
+        output_file_path.open("ab") as output_handle,
     ):
         buffer = ""
         for line in input_handle:
@@ -130,10 +131,18 @@ def run_log_conversion(
         raise FileNotFoundError(f"Input file not found: {input_file_path}")
 
     destination_path = output_file_path or input_file_path.with_suffix(".jsonl")
-    last_timestamp = get_last_timestamp(destination_path)
-    if last_timestamp:
-        LOGGER.info("Found existing output. Appending entries after %s.", last_timestamp)
+    output_exists = destination_path.exists()
+    if output_exists:
+        _ = ensure_project_metadata_line(destination_path)
+        last_timestamp = get_last_timestamp(destination_path)
+        if last_timestamp:
+            LOGGER.info("Found existing output. Appending entries after %s.", last_timestamp)
+        else:
+            LOGGER.info("Found existing output with no timestamped events; appending from start.")
     else:
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        _initialize_output_file(destination_path)
+        last_timestamp = None
         LOGGER.info("Starting fresh conversion for %s.", input_file_path)
 
     converted_count, skipped_count = convert_log_file(
@@ -174,3 +183,10 @@ def _extract_timestamp(raw_line: bytes) -> str | None:
         return None
     timestamp = attributes.get("event.timestamp")
     return timestamp if isinstance(timestamp, str) else None
+
+
+def _initialize_output_file(output_file_path: Path) -> None:
+    metadata = ProjectMetadata(project_id=uuid4())
+    with output_file_path.open("wb") as handle:
+        handle.write(build_metadata_line(metadata))
+        handle.write(b"\n")

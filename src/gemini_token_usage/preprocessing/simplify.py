@@ -11,17 +11,19 @@ from typing import Any
 import orjson
 import orjsonl
 
+from .metadata import ensure_project_metadata_line
 from .resolve_input import resolve_jsonl_input
 
 LOGGER = logging.getLogger(__name__)
 
 
-def simplify_record(record: dict[str, Any], level: int) -> dict[str, Any] | None:
+def simplify_record(record: dict[str, Any], level: int, line_number: int | None = None) -> dict[str, Any] | None:
     """Simplify one telemetry record by level.
 
     Args:
         record: Original telemetry record.
         level: Simplification level (0-3).
+        line_number: Source line number in JSONL input, when available.
 
     Returns:
         Simplified record or `None` when filtered out.
@@ -29,6 +31,13 @@ def simplify_record(record: dict[str, Any], level: int) -> dict[str, Any] | None
     Raises:
         ValueError: If `level` is outside `[0, 3]`.
     """
+    record_type = record.get("record_type")
+    if record_type == "gemini_cli.project_metadata" and (line_number is None or line_number > 1):
+        # Note: assuming not at the first line when line_number is None
+        raise ValueError("Metadata record is only allowed at line 1.")
+    if record_type == "gemini_cli.project_metadata":
+        return record
+
     if level == 0:
         return record
     if level < 0 or level > 3:
@@ -100,6 +109,7 @@ def run_log_simplification(
         raise ValueError("Level must be between 0 and 3.")
 
     jsonl_path = resolve_jsonl_input(input_file_path)
+    _ = ensure_project_metadata_line(jsonl_path)
     if level == 0:
         LOGGER.warning("Level 0 is a no-op.")
         return jsonl_path
@@ -117,11 +127,11 @@ def run_log_simplification(
 
     try:
         with temp_file.open("wb") as output_handle:
-            for obj in orjsonl.stream(jsonl_path):
+            for line_number, obj in enumerate(orjsonl.stream(jsonl_path), start=1):
                 if not isinstance(obj, dict):
-                    LOGGER.warning("Found malformed record in %s. Skipping.", jsonl_path)
+                    LOGGER.warning("Found malformed record in %s at line %d. Skipping.", jsonl_path, line_number)
                     continue
-                simplified_obj = simplify_record(obj, level=level)
+                simplified_obj = simplify_record(obj, level=level, line_number=line_number)
                 if simplified_obj is None:
                     continue
                 output_handle.write(orjson.dumps(simplified_obj))
@@ -139,6 +149,10 @@ def run_log_simplification(
         _ = temp_file.rename(jsonl_path)
         LOGGER.info("%s simplified at level %d", jsonl_path, level)
         return jsonl_path
+    except ValueError:
+        if temp_file.exists():
+            temp_file.unlink(missing_ok=True)
+        raise
     except Exception as exc:
         if temp_file.exists():
             temp_file.unlink(missing_ok=True)

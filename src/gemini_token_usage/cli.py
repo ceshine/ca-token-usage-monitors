@@ -9,7 +9,12 @@ from zoneinfo import ZoneInfo
 import typer
 from rich.console import Console
 
+from .ingestion.errors import ConfirmationDeclinedError, IngestionError
+from .ingestion.repository import IngestionRepository
+from .ingestion.schemas import IngestionCounters, IngestionSourceRow
+from .ingestion.service import IngestionService
 from .preprocessing.convert import run_log_conversion
+from .preprocessing.metadata import ensure_project_metadata_line
 from .preprocessing.resolve_input import resolve_preprocess_input
 from .preprocessing.simplify import run_log_simplification
 from .stats.render import render_daily_usage_statistics
@@ -17,6 +22,7 @@ from .stats.service import StatsService
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_ARCHIVE_FOLDER = Path("/tmp")
+DEFAULT_DATABASE_PATH = Path("data/token_usage.duckdb")
 
 TYPER_APP = typer.Typer(help="Gemini token usage tooling.")
 
@@ -112,6 +118,57 @@ def simplify_command(
     typer.echo(f"simplified_file={simplified_path}")
 
 
+@TYPER_APP.command("ingest")
+def ingest_command(
+    input_paths: list[Path] = typer.Argument(
+        None,
+        help="Directories or telemetry.jsonl files to ingest.",
+    ),
+    all_active: bool = typer.Option(
+        False,
+        "--all-active",
+        help="Include all currently active tracked sources from the database.",
+    ),
+    auto_deactivate: bool = typer.Option(
+        False,
+        "--auto-deactivate",
+        help="With --all-active, mark missing active sources as inactive automatically.",
+    ),
+    database_path: Path = typer.Option(
+        DEFAULT_DATABASE_PATH,
+        "--database-path",
+        "-d",
+        help="DuckDB file path for ingestion state and usage events.",
+    ),
+) -> None:
+    """Ingest Gemini usage events from preprocessed telemetry.jsonl files into DuckDB."""
+    _configure_logging()
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+
+    repository = IngestionRepository(database_path)
+    try:
+        service = IngestionService(
+            repository=repository,
+            confirm_new_source=_confirm_new_source_registration,
+            confirm_reactivate=_confirm_source_reactivation,
+            confirm_project_path_move=_confirm_source_path_update,
+        )
+        counters = service.ingest(
+            input_paths=list(input_paths) if input_paths is not None else [],
+            include_all_active=all_active,
+            auto_deactivate=auto_deactivate,
+        )
+    except ConfirmationDeclinedError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
+    except IngestionError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        repository.close()
+
+    _emit_ingest_summary(counters)
+
+
 def _run_preprocessing(
     log_file_path: Path,
     enable_archiving: bool,
@@ -140,6 +197,7 @@ def _run_preprocessing(
         return processed
 
     assert resolved.jsonl_file is not None, "A JSONL file should always be resolved when source_log_file is absent."
+    _ = ensure_project_metadata_line(resolved.jsonl_file)
     console.print(f"Using [bold]{resolved.jsonl_file}[/bold] as the JSONL log file", style="green")
     return resolved.jsonl_file
 
@@ -161,6 +219,47 @@ def _parse_timezone(timezone: str | None) -> ZoneInfo | None:
         return ZoneInfo(timezone)
     except Exception as exc:
         raise typer.BadParameter(f"Invalid timezone: {timezone}.") from exc
+
+
+def _emit_ingest_summary(counters: IngestionCounters) -> None:
+    """Print ingestion counters to stdout."""
+    typer.echo("\nSummary:")
+    lines = [
+        f"sources_scanned={counters.sources_scanned}",
+        f"sources_ingested={counters.sources_ingested}",
+        f"sources_skipped_unchanged={counters.sources_skipped_unchanged}",
+        f"sources_missing={counters.sources_missing}",
+        f"sources_auto_deactivated={counters.sources_auto_deactivated}",
+        f"usage_events_total={counters.usage_events_total}",
+        f"usage_events_skipped_before_checkpoint={counters.usage_events_skipped_before_checkpoint}",
+        f"usage_rows_attempted_insert={counters.usage_rows_attempted_insert}",
+    ]
+    for line in lines:
+        typer.echo(line)
+
+
+def _confirm_new_source_registration(jsonl_file_path: Path, project_id) -> bool:
+    """Prompt for new source path registration."""
+    return typer.confirm(
+        f"Register new source path {jsonl_file_path} for project_id {project_id}?",
+        default=False,
+    )
+
+
+def _confirm_source_reactivation(source: IngestionSourceRow) -> bool:
+    """Prompt for source reactivation."""
+    return typer.confirm(
+        f"Source {source.jsonl_file_path} is inactive. Reactivate and ingest it?",
+        default=False,
+    )
+
+
+def _confirm_source_path_update(source: IngestionSourceRow, new_path: Path) -> bool:
+    """Prompt for in-place source path update for an existing project_id."""
+    return typer.confirm(
+        (f"Project {source.project_id} is currently tracked at {source.jsonl_file_path}. Update it to {new_path}?"),
+        default=False,
+    )
 
 
 def module_cli_entry_point() -> None:
