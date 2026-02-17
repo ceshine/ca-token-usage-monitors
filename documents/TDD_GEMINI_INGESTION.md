@@ -37,6 +37,9 @@ Out of scope:
 12. Declining a required confirmation exits with non-zero.
 13. Malformed metadata line fails fast; user must fix manually.
 14. `--auto-deactivate` controls active-flag updates for missing active paths. Default run does not change `active`.
+15. Ingested event identity uses `(project_id, event_timestamp, model_code)`.
+16. If duplicate event keys are detected during ingestion, fail hard.
+17. Tail checkpoint uses tuple `(last_ingested_event_timestamp, last_ingested_model_code)`.
 
 ## 3. JSONL Metadata Contract
 
@@ -109,8 +112,8 @@ CREATE TABLE IF NOT EXISTS gemini_ingestion_sources (
     active BOOLEAN NOT NULL DEFAULT TRUE,
     file_size_bytes BIGINT,
     file_mtime TIMESTAMPTZ,
-    last_ingested_line_number BIGINT NOT NULL DEFAULT 0,
     last_ingested_event_timestamp TIMESTAMPTZ,
+    last_ingested_model_code VARCHAR,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -122,6 +125,7 @@ Notes:
 - Path is canonical and unique.
 - `active` controls `--all-active` selection.
 - File metadata supports unchanged-file skipping.
+- Checkpoint is the latest ingested event key tuple `(event_timestamp, model_code)`.
 
 ## 5.2 `gemini_usage_events`
 
@@ -130,7 +134,6 @@ Stores ingested API response usage rows.
 ```sql
 CREATE TABLE IF NOT EXISTS gemini_usage_events (
     project_id UUID NOT NULL,
-    event_line_number BIGINT NOT NULL,
     event_timestamp TIMESTAMPTZ NOT NULL,
     model_code VARCHAR NOT NULL,
     input_tokens BIGINT NOT NULL,
@@ -138,16 +141,15 @@ CREATE TABLE IF NOT EXISTS gemini_usage_events (
     output_tokens BIGINT NOT NULL,
     thoughts_tokens BIGINT NOT NULL,
     total_tokens BIGINT NOT NULL,
-    usd_cost DOUBLE NOT NULL,
     ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (project_id, event_line_number)
+    PRIMARY KEY (project_id, event_timestamp, model_code)
 );
 ```
 
 Notes:
 
-- Event uniqueness is `(project_id, event_line_number)` under append-only JSONL assumption.
-- `usd_cost` is computed using shared `model_pricing.get_price_spec`.
+- Event uniqueness is `(project_id, event_timestamp, model_code)`.
+- Statistics/cost reporting is computed at query time, not persisted in ingestion rows.
 
 ## 6. Source Reconciliation Logic
 
@@ -190,14 +192,17 @@ Collision guard:
 5. For each reconciled source:
    - stat file (`size`, `mtime`).
    - if unchanged vs DB bookkeeping, skip.
-   - parse JSONL stream with line numbers.
-   - line 1 must be valid metadata and match source `project_id`.
+   - parse JSONL stream.
+   - first JSONL record must be valid metadata and match source `project_id`.
    - ingest only usage rows where `attributes.event.name == "gemini_cli.api_response"`.
-   - checkpoint filter: `line_number > last_ingested_line_number`.
+   - checkpoint filter when checkpoint exists:
+     - `event_timestamp > last_ingested_event_timestamp`, or
+     - `event_timestamp == last_ingested_event_timestamp AND model_code >= last_ingested_model_code`
+   - `>=` boundary on `model_code` intentionally re-includes the checkpoint row so conflict-ignore keeps reruns idempotent.
    - parse token fields and timestamp with strict validation.
-   - compute per-event cost from shared pricing.
+   - enforce uniqueness of `(event_timestamp, model_code)` for the parsed batch; fail on duplicates.
    - insert rows with conflict-ignore semantics.
-   - update source bookkeeping (`file_size_bytes`, `file_mtime`, `last_ingested_line_number`, `last_ingested_event_timestamp`, `updated_at`) in same transaction.
+   - update source bookkeeping (`file_size_bytes`, `file_mtime`, `last_ingested_event_timestamp`, `last_ingested_model_code`, `updated_at`) in same transaction.
 
 ## 8. Error Handling Rules
 
@@ -210,11 +215,13 @@ Fail fast with descriptive error for:
 - Unsupported input path type for ingest.
 - Missing resolved JSONL with preprocess command suggestion.
 - Active project collision.
+- Duplicate `(event_timestamp, model_code)` events for the same project.
+- Events not sortable by checkpoint tuple logic (invalid/missing model code for usage events).
 
 Append-only guardrails:
 
-- If current file line count is less than tracked `last_ingested_line_number`, fail (likely rewrite/truncation).
-- If file content was rewritten in a way that breaks append-only assumptions, require manual remediation.
+- If latest event tuple in the file is earlier than tracked checkpoint tuple, fail (likely rewrite/truncation).
+- If file content was rewritten in a way that breaks timestamp-tail assumptions, require manual remediation.
 
 ## 9. Implementation Plan (Code)
 
@@ -251,4 +258,5 @@ Append-only guardrails:
 9. Malformed metadata fails.
 10. Duplicate active project rows fail.
 11. Idempotent rerun skips unchanged files.
-12. Tail ingestion inserts only new lines.
+12. Timestamp-tail ingestion inserts only new events.
+13. Checkpoint boundary includes same-timestamp rows with model-code tie-break and remains idempotent on rerun.
