@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
@@ -13,11 +14,11 @@ from codex_token_usage.ingestion.errors import DeltaConsistencyError, DuplicateC
 from codex_token_usage.ingestion.schemas import TokenEventRow, TokenUsageValues
 
 
-def test_dedupe_keeps_first_duplicate_and_counts_skips() -> None:
-    """Duplicate cumulative totals with same payload should keep first row only."""
+def test_dedupe_keeps_first_duplicate_even_when_last_usage_differs() -> None:
+    """Duplicates with matching total_usage should keep first row only."""
     rows = [
         _row(line=1, total=10, last=10),
-        _row(line=2, total=10, last=10),
+        _row(line=2, total=10, last=0),
         _row(line=3, total=18, last=8),
     ]
 
@@ -28,11 +29,19 @@ def test_dedupe_keeps_first_duplicate_and_counts_skips() -> None:
 
 
 def test_dedupe_fails_on_conflicting_duplicate_payload() -> None:
-    """Duplicate cumulative totals with mismatched payload must fail."""
-    rows = [
-        _row(line=1, total=10, last=10),
+    """Duplicate cumulative totals with mismatched total_usage must fail."""
+    first_row = _row(line=1, total=10, last=10)
+    conflicting_duplicate = replace(
         _row(line=2, total=10, last=0),
-    ]
+        total_usage=TokenUsageValues(
+            input_tokens=9,
+            cached_input_tokens=1,
+            output_tokens=0,
+            reasoning_output_tokens=0,
+            total_tokens=10,
+        ),
+    )
+    rows = [first_row, conflicting_duplicate]
 
     with pytest.raises(DuplicateConflictError):
         dedupe_and_validate_token_rows(Path("session.jsonl"), rows)

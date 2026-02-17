@@ -7,7 +7,8 @@ from datetime import UTC, date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from .price_spec import get_price_spec
+from model_pricing import get_price_spec
+
 from .repository import StatsRepository
 from .schemas import DailyUsageStatistics, TokenUsageEvent, UsageStats
 
