@@ -12,3 +12,5 @@ wheels/
 .gemini
 cache
 data
+opencode.json
+.zed

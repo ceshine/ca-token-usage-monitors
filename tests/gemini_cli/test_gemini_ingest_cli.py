@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from uuid import UUID
 
@@ -34,6 +35,8 @@ def test_ingest_command_registers_and_ingests_new_source(tmp_path: Path) -> None
     assert "sources_scanned=1" in result.stdout
     assert "sources_ingested=1" in result.stdout
     assert "usage_rows_attempted_insert=1" in result.stdout
+    assert "Statistics (last 7 days):" in result.stdout
+    assert "Daily Token Usage" in result.stdout
 
 
 def test_ingest_command_exits_nonzero_when_confirmation_declined(tmp_path: Path) -> None:
@@ -59,20 +62,30 @@ def test_ingest_command_exits_nonzero_when_confirmation_declined(tmp_path: Path)
     assert "declined" in result.stdout.lower()
 
 
-def test_ingest_command_reports_preprocess_suggestion_for_missing_jsonl(tmp_path: Path) -> None:
-    """Non-preprocessed input should fail with exact preprocess suggestion."""
+def test_ingest_command_preprocesses_selected_paths_before_ingestion(tmp_path: Path) -> None:
+    """`ingest` should preprocess telemetry.log inputs before ingestion."""
     log_file = tmp_path / "telemetry.log"
-    log_file.write_text("{}", encoding="utf-8")
+    _write_concatenated_log(
+        log_file,
+        [
+            _api_response("2026-02-17T00:00:00Z", "gemini-2.5-pro"),
+            _api_response("2010-01-01T00:00:00Z", "gemini-2.5-pro"),
+        ],
+    )
     database_path = tmp_path / "usage.duckdb"
 
     runner = CliRunner()
     result = runner.invoke(
         TYPER_APP,
         ["ingest", str(log_file), "--database-path", str(database_path)],
+        input="y\n",
     )
 
-    assert result.exit_code == 2
-    assert "Run: gemini-token-usage preprocess" in result.output
+    assert result.exit_code == 0
+    assert "Converted" in result.stdout
+    assert "sources_ingested=1" in result.stdout
+    assert "Statistics (last 7 days):" in result.stdout
+    assert "2010-01-01" not in result.stdout
 
 
 def _metadata(project_id: UUID) -> dict[str, object]:
@@ -103,3 +116,10 @@ def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
         for row in rows:
             handle.write(orjson.dumps(row))
             handle.write(b"\n")
+
+
+def _write_concatenated_log(path: Path, rows: list[dict[str, object]]) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, indent=2))
+            handle.write("\n")

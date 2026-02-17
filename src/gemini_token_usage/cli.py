@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from datetime import UTC, date, datetime, timedelta
 
 import typer
 from rich.console import Console
@@ -142,9 +142,29 @@ def ingest_command(
         "-d",
         help="DuckDB file path for ingestion state and usage events.",
     ),
+    enable_archiving: bool = typer.Option(
+        False,
+        "--enable-archiving",
+        help="Archive raw telemetry.log files when preprocessing selected input paths.",
+    ),
+    log_simplify_level: int = typer.Option(
+        1,
+        "--log-simplify-level",
+        min=0,
+        max=3,
+        help="Simplification level used when preprocessing selected telemetry.log files.",
+    ),
 ) -> None:
     """Ingest Gemini usage events from preprocessed telemetry.jsonl files into DuckDB."""
     _configure_logging()
+    console = Console()
+    selected_paths = list(input_paths) if input_paths is not None else []
+    preprocessed_input_paths = _preprocess_ingest_input_paths(
+        input_paths=selected_paths,
+        enable_archiving=enable_archiving,
+        log_simplify_level=log_simplify_level,
+        console=console,
+    )
     database_path.parent.mkdir(parents=True, exist_ok=True)
 
     repository = IngestionRepository(database_path)
@@ -156,7 +176,7 @@ def ingest_command(
             confirm_project_path_move=_confirm_source_path_update,
         )
         counters = service.ingest(
-            input_paths=list(input_paths) if input_paths is not None else [],
+            input_paths=preprocessed_input_paths,
             include_all_active=all_active,
             auto_deactivate=auto_deactivate,
         )
@@ -169,6 +189,7 @@ def ingest_command(
         repository.close()
 
     _emit_ingest_summary(counters)
+    _emit_last_7_days_stats(database_path=database_path, console=console)
 
 
 @TYPER_APP.command("stats")
@@ -198,21 +219,7 @@ def stats_command(
 
     timezone_info = _parse_timezone(timezone)
     since_date = _parse_since_date(since)
-    repository: StatsRepository | None = None
-    try:
-        repository = StatsRepository(database_path)
-        events = repository.fetch_token_events()
-        if since_date is not None:
-            events = [
-                event for event in events if _resolve_event_date(event.event_timestamp, timezone_info) >= since_date
-            ]
-        report = StatsService().collect_daily_statistics_from_events(events=events, timezone=timezone_info)
-    except StatsRepositoryError as exc:
-        raise typer.BadParameter(str(exc)) from exc
-    finally:
-        if repository is not None:
-            repository.close()
-
+    report = _collect_stats_report(database_path=database_path, timezone=timezone_info, since_date=since_date)
     render_daily_usage_statistics(report=report, console=Console())
 
 
@@ -256,6 +263,58 @@ def _configure_logging() -> None:
         format="[%(asctime)s][%(levelname)s][%(name)s] %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S%z",
     )
+
+
+def _preprocess_ingest_input_paths(
+    input_paths: list[Path],
+    enable_archiving: bool,
+    log_simplify_level: int,
+    console: Console,
+) -> list[Path]:
+    """Preprocess selected paths before ingestion and return resolved JSONL paths."""
+    processed_paths: list[Path] = []
+    for input_path in input_paths:
+        try:
+            processed_paths.append(
+                _run_preprocessing(
+                    log_file_path=input_path,
+                    enable_archiving=enable_archiving,
+                    log_simplify_level=log_simplify_level,
+                    console=console,
+                )
+            )
+        except (FileNotFoundError, ValueError, RuntimeError) as exc:
+            raise typer.BadParameter(str(exc)) from exc
+    return processed_paths
+
+
+def _emit_last_7_days_stats(database_path: Path, console: Console) -> None:
+    """Render 7-day usage statistics from ingested database events."""
+    today = datetime.now().date()
+    since_date = today - timedelta(days=6)
+    report = _collect_stats_report(database_path=database_path, timezone=None, since_date=since_date)
+    typer.echo("\nStatistics (last 7 days):")
+    render_daily_usage_statistics(report=report, console=console)
+
+
+def _collect_stats_report(
+    database_path: Path,
+    timezone: ZoneInfo | None,
+    since_date: date | None,
+):
+    """Collect daily stats report from database events with optional date filtering."""
+    repository: StatsRepository | None = None
+    try:
+        repository = StatsRepository(database_path)
+        events = repository.fetch_token_events()
+        if since_date is not None:
+            events = [event for event in events if _resolve_event_date(event.event_timestamp, timezone) >= since_date]
+        return StatsService().collect_daily_statistics_from_events(events=events, timezone=timezone)
+    except StatsRepositoryError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        if repository is not None:
+            repository.close()
 
 
 def _parse_timezone(timezone: str | None) -> ZoneInfo | None:
