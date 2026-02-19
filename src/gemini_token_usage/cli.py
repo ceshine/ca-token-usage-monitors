@@ -14,6 +14,7 @@ from .ingestion.errors import ConfirmationDeclinedError, IngestionError
 from .ingestion.repository import IngestionRepository
 from .ingestion.schemas import IngestionCounters, IngestionSourceRow
 from .ingestion.service import IngestionService
+from .ingestion.source_bookkeeping import SourceBookkeepingService
 from .preprocessing.convert import run_log_conversion
 from .preprocessing.metadata import ensure_project_metadata_line
 from .preprocessing.resolve_input import resolve_preprocess_input
@@ -159,27 +160,47 @@ def ingest_command(
     _configure_logging()
     console = Console()
     selected_paths = list(input_paths) if input_paths is not None else []
-    preprocessed_input_paths = _preprocess_ingest_input_paths(
-        input_paths=selected_paths,
-        enable_archiving=enable_archiving,
-        log_simplify_level=log_simplify_level,
-        console=console,
-    )
     database_path.parent.mkdir(parents=True, exist_ok=True)
 
     repository = IngestionRepository(database_path)
     try:
-        service = IngestionService(
+        source_bookkeeping = SourceBookkeepingService(
             repository=repository,
             confirm_new_source=_confirm_new_source_registration,
             confirm_reactivate=_confirm_source_reactivation,
             confirm_project_path_move=_confirm_source_path_update,
         )
-        counters = service.ingest(
-            input_paths=preprocessed_input_paths,
-            include_all_active=all_active,
-            auto_deactivate=auto_deactivate,
+        active_source_paths: list[Path] = []
+        source_missing_count = 0
+        source_auto_deactivated_count = 0
+        if all_active:
+            active_selection = source_bookkeeping.resolve_all_active_paths(auto_deactivate=auto_deactivate)
+            active_source_paths = active_selection.jsonl_paths
+            source_missing_count = active_selection.sources_missing
+            source_auto_deactivated_count = active_selection.sources_auto_deactivated
+
+        candidate_paths = _dedupe_input_paths(selected_paths + active_source_paths)
+        LOGGER.info("Processing %d paths", len(candidate_paths))
+        preprocessed_input_paths = _preprocess_ingest_input_paths(
+            input_paths=candidate_paths,
+            enable_archiving=enable_archiving,
+            log_simplify_level=log_simplify_level,
+            console=console,
         )
+
+        service = IngestionService(
+            repository=repository,
+            source_bookkeeping=source_bookkeeping,
+        )
+        counters = IngestionCounters(
+            sources_missing=source_missing_count,
+            sources_auto_deactivated=source_auto_deactivated_count,
+        )
+        if preprocessed_input_paths:
+            ingest_counters = service.ingest(input_paths=preprocessed_input_paths)
+            counters = _sum_ingestion_counters(left=counters, right=ingest_counters)
+        elif not all_active:
+            counters = service.ingest(input_paths=preprocessed_input_paths)
     except ConfirmationDeclinedError as exc:
         typer.echo(str(exc))
         raise typer.Exit(code=1) from exc
@@ -286,6 +307,33 @@ def _preprocess_ingest_input_paths(
         except (FileNotFoundError, ValueError, RuntimeError) as exc:
             raise typer.BadParameter(str(exc)) from exc
     return processed_paths
+
+
+def _dedupe_input_paths(input_paths: list[Path]) -> list[Path]:
+    """Deduplicate input paths while preserving first-seen order."""
+    deduped: dict[str, Path] = {}
+    for input_path in input_paths:
+        canonical_key = str(input_path.resolve())
+        if canonical_key in deduped:
+            continue
+        deduped[canonical_key] = input_path
+    return list(deduped.values())
+
+
+def _sum_ingestion_counters(left: IngestionCounters, right: IngestionCounters) -> IngestionCounters:
+    """Return field-wise sum of two ingestion counter snapshots."""
+    return IngestionCounters(
+        sources_scanned=left.sources_scanned + right.sources_scanned,
+        sources_ingested=left.sources_ingested + right.sources_ingested,
+        sources_skipped_unchanged=left.sources_skipped_unchanged + right.sources_skipped_unchanged,
+        sources_missing=left.sources_missing + right.sources_missing,
+        sources_auto_deactivated=left.sources_auto_deactivated + right.sources_auto_deactivated,
+        usage_events_total=left.usage_events_total + right.usage_events_total,
+        usage_events_skipped_before_checkpoint=(
+            left.usage_events_skipped_before_checkpoint + right.usage_events_skipped_before_checkpoint
+        ),
+        usage_rows_attempted_insert=left.usage_rows_attempted_insert + right.usage_rows_attempted_insert,
+    )
 
 
 def _emit_last_7_days_stats(database_path: Path, console: Console) -> None:

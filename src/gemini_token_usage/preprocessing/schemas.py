@@ -10,7 +10,8 @@ from pathlib import Path
 class PreprocessInputResolution:
     """Resolved log paths for preprocessing.
 
-    Exactly one of `source_log_file` or `jsonl_file` is expected to be set.
+    `source_log_file` may be set alongside `jsonl_file` when resolving from a
+    JSONL input path when a sibling `telemetry.log` exists.
     """
 
     source_log_file: Path | None

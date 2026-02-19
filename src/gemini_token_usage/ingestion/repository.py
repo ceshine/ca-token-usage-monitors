@@ -166,6 +166,36 @@ WHERE project_id = ?
             [active, str(project_id)],
         )
 
+    def deactivate_sources(self, project_ids: list[UUID]) -> int:
+        """Set `active=FALSE` for multiple project IDs and return updated row count."""
+        project_id_values = [str(project_id) for project_id in dict.fromkeys(project_ids)]
+        if not project_id_values:
+            return 0
+
+        placeholders = ", ".join("?" for _ in project_id_values)
+        count_row = self._connection.execute(
+            f"""
+SELECT COUNT(*)
+FROM gemini_ingestion_sources
+WHERE active = TRUE AND project_id IN ({placeholders})
+            """,
+            project_id_values,
+        ).fetchone()
+        assert count_row is not None
+        row_count = int(count_row[0])
+        if row_count == 0:
+            return 0
+
+        _ = self._connection.execute(
+            f"""
+UPDATE gemini_ingestion_sources
+SET active = FALSE, updated_at = NOW()
+WHERE active = TRUE AND project_id IN ({placeholders})
+            """,
+            project_id_values,
+        )
+        return row_count
+
     def update_source_path(self, project_id: UUID, jsonl_file_path: str) -> None:
         """Update source path in-place for an existing project ID row."""
         _ = self._connection.execute(

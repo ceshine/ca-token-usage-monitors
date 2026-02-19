@@ -31,13 +31,13 @@ def test_ingestion_service_is_idempotent_and_checkpoint_resumable(tmp_path: Path
     repository = IngestionRepository(tmp_path / "usage.duckdb")
     service = IngestionService(repository=repository)
 
-    first = service.ingest([jsonl_file], include_all_active=False, auto_deactivate=False)
+    first = service.ingest([jsonl_file])
     assert first.sources_scanned == 1
     assert first.sources_ingested == 1
     assert first.sources_skipped_unchanged == 0
     assert first.usage_rows_attempted_insert == 2
 
-    second = service.ingest([jsonl_file], include_all_active=False, auto_deactivate=False)
+    second = service.ingest([jsonl_file])
     assert second.sources_scanned == 1
     assert second.sources_ingested == 0
     assert second.sources_skipped_unchanged == 1
@@ -45,7 +45,7 @@ def test_ingestion_service_is_idempotent_and_checkpoint_resumable(tmp_path: Path
     _append_jsonl(jsonl_file, [_api_response("2026-02-17T00:01:00Z", "gemini-c")])
     os.utime(jsonl_file, (jsonl_file.stat().st_atime + 10, jsonl_file.stat().st_mtime + 10))
 
-    third = service.ingest([jsonl_file], include_all_active=False, auto_deactivate=False)
+    third = service.ingest([jsonl_file])
     assert third.sources_scanned == 1
     assert third.sources_ingested == 1
     assert third.usage_events_total == 3
@@ -69,23 +69,6 @@ def test_ingestion_service_is_idempotent_and_checkpoint_resumable(tmp_path: Path
         repository.close()
 
 
-def test_ingestion_service_auto_deactivates_missing_active_sources(tmp_path: Path) -> None:
-    """`--all-active --auto-deactivate` should mark missing source paths inactive."""
-    repository = IngestionRepository(tmp_path / "usage.duckdb")
-    repository.ensure_schema()
-    project_id = UUID("00000000-0000-0000-0000-000000000001")
-    repository.insert_source(project_id=project_id, jsonl_file_path=str(tmp_path / "missing.jsonl"), active=True)
-
-    service = IngestionService(repository=repository)
-    counters = service.ingest([], include_all_active=True, auto_deactivate=True)
-
-    assert counters.sources_auto_deactivated == 1
-    source = repository.get_source_by_project_id(project_id)
-    assert source is not None
-    assert source.active is False
-    repository.close()
-
-
 def test_ingestion_service_fails_when_confirmation_declined(tmp_path: Path) -> None:
     """Declined new-source confirmation should fail with non-success signal."""
     project_id = UUID("00000000-0000-0000-0000-000000000001")
@@ -101,7 +84,7 @@ def test_ingestion_service_fails_when_confirmation_declined(tmp_path: Path) -> N
     service = IngestionService(repository=repository, confirm_new_source=lambda _path, _project_id: False)
 
     with pytest.raises(ConfirmationDeclinedError):
-        _ = service.ingest([jsonl_file], include_all_active=False, auto_deactivate=False)
+        _ = service.ingest([jsonl_file])
 
     repository.close()
 

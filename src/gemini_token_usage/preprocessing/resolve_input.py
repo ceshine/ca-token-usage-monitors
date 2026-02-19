@@ -36,7 +36,9 @@ def resolve_preprocess_input(log_file_path: Path) -> PreprocessInputResolution:
     if log_file_path.suffix == ".log":
         return PreprocessInputResolution(source_log_file=log_file_path, jsonl_file=None)
     if log_file_path.suffix == ".jsonl":
-        return PreprocessInputResolution(source_log_file=None, jsonl_file=log_file_path)
+        source_log_candidate = log_file_path.with_name("telemetry.log")
+        source_log_file = source_log_candidate if source_log_candidate.exists() else None
+        return PreprocessInputResolution(source_log_file=source_log_file, jsonl_file=log_file_path)
     raise ValueError(f"Input file must be a directory, .log, or .jsonl path: {log_file_path}")
 
 

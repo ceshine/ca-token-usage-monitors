@@ -41,3 +41,27 @@ def test_resolve_jsonl_input_rejects_non_jsonl_file(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match=r"\.jsonl"):
         _ = resolve_jsonl_input(text_file)
+
+
+def test_resolve_preprocess_input_sets_source_log_for_jsonl_path_when_present(tmp_path: Path) -> None:
+    """JSONL file resolution should also expose sibling telemetry.log source path."""
+    source_log = tmp_path / "telemetry.log"
+    source_log.write_text("{}", encoding="utf-8")
+    jsonl_file = tmp_path / "telemetry.jsonl"
+    jsonl_file.write_text("{}", encoding="utf-8")
+
+    resolved = resolve_preprocess_input(jsonl_file)
+
+    assert resolved.source_log_file == source_log
+    assert resolved.jsonl_file == jsonl_file
+
+
+def test_resolve_preprocess_input_leaves_source_log_unset_for_jsonl_path_when_missing(tmp_path: Path) -> None:
+    """JSONL file resolution should not set source_log_file when telemetry.log is absent."""
+    jsonl_file = tmp_path / "telemetry.jsonl"
+    jsonl_file.write_text("{}", encoding="utf-8")
+
+    resolved = resolve_preprocess_input(jsonl_file)
+
+    assert resolved.source_log_file is None
+    assert resolved.jsonl_file == jsonl_file
