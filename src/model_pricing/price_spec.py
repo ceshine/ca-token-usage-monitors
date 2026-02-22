@@ -16,8 +16,20 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_PRICE_SPEC_URL = (
     "https://raw.githubusercontent.com/BerriAI/litellm/refs/heads/main/model_prices_and_context_window.json"
 )
-DEFAULT_PRICE_CACHE_PATH = Path("~/.gemini/prices.json").expanduser()
 _CACHE_PATH_UNSET = object()
+
+
+def _default_price_cache_path() -> Path:
+    """Return the default cache path following XDG conventions on Linux."""
+    xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
+    if xdg_cache_home:
+        base_cache_dir = Path(xdg_cache_home).expanduser()
+    else:
+        base_cache_dir = Path("~/.cache").expanduser()
+    return base_cache_dir / "coding-agent-token-monitor" / "price_cache.json"
+
+
+DEFAULT_PRICE_CACHE_PATH = _default_price_cache_path()
 
 
 @dataclass(frozen=True)
