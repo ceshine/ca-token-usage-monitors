@@ -32,4 +32,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/codex_token_usage", "src/model_pricing", "src/gemini_token_usage", "src/opencode_token_usage"]
+packages = [
+    "src/codex_token_usage",
+    "src/model_pricing",
+    "src/gemini_token_usage",
+    "src/opencode_token_usage",
+    "src/ca_token_monitor_internal",
+]
