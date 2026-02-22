@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -21,7 +22,19 @@ from .stats.service import StatsService
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_SOURCE_DB = Path.home() / ".local" / "share" / "opencode" / "opencode.db"
-DEFAULT_DATABASE_PATH = Path("data/token_usage.duckdb")
+
+
+def _default_database_path() -> Path:
+    """Return the default DuckDB path following XDG data directory conventions."""
+    xdg_data_home = os.environ.get("XDG_DATA_HOME")
+    if xdg_data_home:
+        base_data_dir = Path(xdg_data_home).expanduser()
+    else:
+        base_data_dir = Path("~/.local/share").expanduser()
+    return base_data_dir / "coding-agent-token-monitor" / "token_usage.duckdb"
+
+
+DEFAULT_DATABASE_PATH = _default_database_path()
 
 TYPER_APP = typer.Typer(help="OpenCode token usage tooling.")
 
