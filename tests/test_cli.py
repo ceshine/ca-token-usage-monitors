@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
@@ -149,12 +150,13 @@ def test_ingest_command_prints_last_7_days_stats(
     sessions_root = tmp_path / "sessions"
     sessions_root.mkdir(parents=True)
     session_file = sessions_root / "session-1.jsonl"
+    recent_timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     _write_jsonl(
         session_file,
         [
             _session_meta_event(),
-            _turn_context_event("2026-02-15T00:00:01Z", "gpt-5", "00000000-0000-0000-0000-000000000010"),
-            _token_event("2026-02-15T00:00:02Z", total=10, last=10),
+            _turn_context_event(recent_timestamp, "gpt-5", "00000000-0000-0000-0000-000000000010"),
+            _token_event(recent_timestamp, total=10, last=10),
         ],
     )
 
