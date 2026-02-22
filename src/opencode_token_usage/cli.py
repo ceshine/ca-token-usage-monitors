@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import typer
+from rich.console import Console
 
 from .ingestion.errors import IngestionError
 from .ingestion.repository import IngestionRepository
 from .ingestion.schemas import IngestionCounters
 from .ingestion.service import IngestionService
 from .ingestion.source_reader import SourceReader
+from .stats.render import render_daily_usage_statistics
+from .stats.repository import StatsRepository, StatsRepositoryError
+from .stats.service import StatsService
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_SOURCE_DB = Path.home() / ".local" / "share" / "opencode" / "opencode.db"
@@ -67,6 +73,49 @@ def ingest_command(
     _emit_summary(counters)
 
 
+@TYPER_APP.command("stats")
+def stats_command(
+    database_path: Path = typer.Option(
+        DEFAULT_DATABASE_PATH,
+        "--database-path",
+        "-d",
+        help="DuckDB file path for ingestion state and token details.",
+    ),
+    timezone: str | None = typer.Option(
+        None,
+        "--timezone",
+        "-tz",
+        help="Timezone to use for daily stats (e.g., 'UTC', 'America/New_York'). Defaults to local system time.",
+    ),
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="Include only usage on/after this date (YYYY-MM-DD).",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable info-level logging."),
+) -> None:
+    """Aggregate and print daily token usage and costs from DuckDB."""
+    _configure_logging(verbose)
+    if not database_path.exists():
+        raise typer.BadParameter(f"Database file not found: {database_path}")
+
+    resolved_timezone = _parse_timezone(timezone)
+    since_date = _parse_since_date(since)
+
+    repository: StatsRepository | None = None
+    try:
+        repository = StatsRepository(database_path)
+        service = StatsService(repository=repository, timezone=resolved_timezone, since=since_date)
+        report = service.collect_daily_statistics()
+    except (StatsRepositoryError, RuntimeError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        if repository is not None:
+            repository.close()
+
+    render_daily_usage_statistics(report, Console())
+
+
 def _configure_logging(verbose: bool) -> None:
     level = logging.INFO if verbose else logging.WARNING
     logging.basicConfig(
@@ -82,6 +131,26 @@ def _emit_summary(counters: IngestionCounters) -> None:
     typer.echo(f"sessions_upserted={counters.sessions_upserted}")
     typer.echo(f"batches_flushed={counters.batches_flushed}")
     typer.echo(f"skipped_no_source_changes={int(counters.skipped_no_source_changes)}")
+
+
+def _parse_timezone(timezone: str | None) -> ZoneInfo | None:
+    """Parse timezone option into a ZoneInfo instance."""
+    if timezone is None:
+        return None
+    try:
+        return ZoneInfo(timezone)
+    except Exception as exc:
+        raise typer.BadParameter(f"Invalid timezone: {timezone}.") from exc
+
+
+def _parse_since_date(since: str | None) -> date | None:
+    """Parse `--since` value into a date."""
+    if since is None:
+        return None
+    try:
+        return date.fromisoformat(since)
+    except ValueError as exc:
+        raise typer.BadParameter(f"Invalid --since value: {since}. Expected YYYY-MM-DD.") from exc
 
 
 def module_cli_entry_point() -> None:
