@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
 
+from ca_token_monitor_internal.database import parse_db_timestamp
 from .schemas import TokenUsageEvent
 
 
@@ -47,10 +47,13 @@ ORDER BY event_timestamp, model_code
 
         events: list[TokenUsageEvent] = []
         for row in rows:
+            event_timestamp = parse_db_timestamp(row[1])
+            if event_timestamp is None:
+                continue
             events.append(
                 TokenUsageEvent(
                     model_code=str(row[0]),
-                    event_timestamp=_parse_db_timestamp(row[1]),
+                    event_timestamp=event_timestamp,
                     input_tokens=int(row[2]),
                     cached_input_tokens=int(row[3]),
                     output_tokens=int(row[4]),
@@ -58,16 +61,3 @@ ORDER BY event_timestamp, model_code
                 )
             )
         return events
-
-
-def _parse_db_timestamp(value: str) -> datetime:
-    """Parse DuckDB TIMESTAMPTZ string output into an aware datetime."""
-    if not isinstance(value, str):
-        raise TypeError(f"Expected timestamp string from DB, got {type(value).__name__}.")
-    normalized = value.replace(" ", "T")
-    if normalized.endswith("+00"):
-        normalized = f"{normalized}:00"
-    parsed = datetime.fromisoformat(normalized)
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
-    return parsed

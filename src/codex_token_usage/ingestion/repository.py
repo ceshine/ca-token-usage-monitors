@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import logging
 from contextlib import contextmanager
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterator
 from uuid import UUID
 
 import duckdb
 
+from ca_token_monitor_internal.database import parse_db_timestamp
 from .schemas import IngestionFileState, SessionCheckpoint, SessionMetadataRow, TokenEventRow
 
 LOGGER = logging.getLogger(__name__)
@@ -94,10 +94,13 @@ WHERE session_file_path = ?
         ).fetchone()
         if row is None:
             return None
+        file_mtime = parse_db_timestamp(row[1])
+        if file_mtime is None:
+            return None
         return IngestionFileState(
             session_file_path=session_file_path,
             file_size_bytes=int(row[0]),
-            file_mtime=_parse_db_timestamp(row[1]),
+            file_mtime=file_mtime,
         )
 
     def get_session_checkpoint(self, session_id: UUID) -> SessionCheckpoint | None:
@@ -114,8 +117,11 @@ LIMIT 1
         ).fetchone()
         if row is None:
             return None
+        last_ts = parse_db_timestamp(row[0])
+        if last_ts is None:
+            return None
         return SessionCheckpoint(
-            last_ts=_parse_db_timestamp(row[0]),
+            last_ts=last_ts,
             last_total_tokens_cumulative=int(row[1]),
         )
 
@@ -208,16 +214,3 @@ DO UPDATE SET
                 file_state.file_mtime,
             ],
         )
-
-
-def _parse_db_timestamp(value: str) -> datetime:
-    """Parse DuckDB TIMESTAMPTZ string output into an aware datetime."""
-    if not isinstance(value, str):
-        raise TypeError(f"Expected timestamp string from DB, got {type(value).__name__}")
-    normalized = value.replace(" ", "T")
-    if normalized.endswith("+00"):
-        normalized = f"{normalized}:00"
-    parsed = datetime.fromisoformat(normalized)
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
-    return parsed
