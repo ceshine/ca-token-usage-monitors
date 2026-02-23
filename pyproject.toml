@@ -39,3 +39,8 @@ packages = [
     "src/opencode_token_usage",
     "src/ca_token_monitor_internal",
 ]
+
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
