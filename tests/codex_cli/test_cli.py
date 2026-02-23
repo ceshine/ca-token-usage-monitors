@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -286,7 +287,8 @@ def test_stats_command_since_rejects_invalid_date(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 2
-    assert "Invalid --since value" in result.output
+    clean_output = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", result.output)
+    assert "Invalid --since value" in clean_output
 
 
 def _create_stats_database(database_path: Path, rows: list[dict[str, object]]) -> None:
