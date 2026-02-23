@@ -10,9 +10,9 @@ from uuid import UUID
 import orjson
 from typer.testing import CliRunner
 
-from gemini_token_usage.cli import TYPER_APP
-from gemini_token_usage.ingestion.repository import IngestionRepository
-from gemini_token_usage.ingestion.schemas import UsageEventRow
+from coding_agent_usage_monitors.gemini_token_usage.cli import TYPER_APP
+from coding_agent_usage_monitors.gemini_token_usage.ingestion.repository import IngestionRepository
+from coding_agent_usage_monitors.gemini_token_usage.ingestion.schemas import UsageEventRow
 
 
 def test_preprocess_converts_log_directory_without_stats(tmp_path: Path) -> None:
@@ -70,7 +70,7 @@ def test_preprocess_with_stats_prints_statistics_tables(tmp_path: Path, monkeypa
         )
 
     monkeypatch.setattr(
-        "gemini_token_usage.stats.service.get_price_spec",
+        "coding_agent_usage_monitors.gemini_token_usage.stats.service.get_price_spec",
         lambda: {
             "gemini-2.5-pro": {
                 "input_cost_per_token": 0.001,
@@ -116,7 +116,7 @@ def test_stats_command_prints_statistics_from_database(tmp_path: Path, monkeypat
         repository.close()
 
     monkeypatch.setattr(
-        "gemini_token_usage.stats.service.get_price_spec",
+        "coding_agent_usage_monitors.gemini_token_usage.stats.service.get_price_spec",
         lambda: {
             "gemini-2.5-pro": {
                 "input_cost_per_token": 0.001,
@@ -169,7 +169,7 @@ def test_stats_command_since_filters_older_dates(tmp_path: Path, monkeypatch) ->
         repository.close()
 
     monkeypatch.setattr(
-        "gemini_token_usage.stats.service.get_price_spec",
+        "coding_agent_usage_monitors.gemini_token_usage.stats.service.get_price_spec",
         lambda: {
             "gemini-2.5-pro": {
                 "input_cost_per_token": 0.001,

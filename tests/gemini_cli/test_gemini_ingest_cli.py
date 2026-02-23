@@ -9,8 +9,8 @@ from uuid import UUID
 import orjson
 from typer.testing import CliRunner
 
-from gemini_token_usage.cli import TYPER_APP
-from gemini_token_usage.ingestion.repository import IngestionRepository
+from coding_agent_usage_monitors.gemini_token_usage.cli import TYPER_APP
+from coding_agent_usage_monitors.gemini_token_usage.ingestion.repository import IngestionRepository
 
 
 def test_ingest_command_registers_and_ingests_new_source(tmp_path: Path) -> None:

@@ -11,7 +11,7 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from codex_token_usage.cli import TYPER_APP
+from coding_agent_usage_monitors.codex_token_usage.cli import TYPER_APP
 
 
 def test_ingest_command_ingests_session_file(tmp_path: Path) -> None:
@@ -105,7 +105,7 @@ def test_stats_command_prints_daily_and_overall_tables(tmp_path: Path, monkeypat
         ],
     )
     monkeypatch.setattr(
-        "codex_token_usage.stats.service.get_price_spec",
+        "coding_agent_usage_monitors.codex_token_usage.stats.service.get_price_spec",
         lambda: {
             "gpt-5": {
                 "input_cost_per_token": 0.001,
@@ -163,7 +163,7 @@ def test_ingest_command_prints_last_7_days_stats(
 
     database_path = tmp_path / "usage.duckdb"
     monkeypatch.setattr(
-        "codex_token_usage.stats.service.get_price_spec",
+        "coding_agent_usage_monitors.codex_token_usage.stats.service.get_price_spec",
         lambda: {
             "gpt-5": {
                 "input_cost_per_token": 0.001,
@@ -197,7 +197,7 @@ def test_stats_command_handles_empty_database(tmp_path: Path, monkeypatch: pytes
     database_path = tmp_path / "usage.duckdb"
     _create_stats_database(database_path, [])
 
-    monkeypatch.setattr("codex_token_usage.stats.service.get_price_spec", lambda: {})
+    monkeypatch.setattr("coding_agent_usage_monitors.codex_token_usage.stats.service.get_price_spec", lambda: {})
 
     runner = CliRunner()
     result = runner.invoke(TYPER_APP, ["stats", "--database-path", str(database_path)])
@@ -231,7 +231,7 @@ def test_stats_command_since_filters_older_days(tmp_path: Path, monkeypatch: pyt
         ],
     )
     monkeypatch.setattr(
-        "codex_token_usage.stats.service.get_price_spec",
+        "coding_agent_usage_monitors.codex_token_usage.stats.service.get_price_spec",
         lambda: {
             "gpt-5": {
                 "input_cost_per_token": 0.001,

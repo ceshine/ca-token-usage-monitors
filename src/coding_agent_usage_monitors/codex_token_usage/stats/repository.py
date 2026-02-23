@@ -1,4 +1,4 @@
-"""DuckDB repository for Gemini token usage statistics queries."""
+"""DuckDB repository for token usage statistics queries."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import duckdb
 
-from ca_token_monitor_internal.database import parse_db_timestamp
+from coding_agent_usage_monitors.common.database import parse_db_timestamp
 from .schemas import TokenUsageEvent
 
 
@@ -15,7 +15,7 @@ class StatsRepositoryError(RuntimeError):
 
 
 class StatsRepository:
-    """Read-only repository for Gemini token usage events."""
+    """Read-only repository for token usage events."""
 
     def __init__(self, database_path: Path) -> None:
         self._connection = duckdb.connect(str(database_path), read_only=True)
@@ -25,7 +25,7 @@ class StatsRepository:
         self._connection.close()
 
     def fetch_token_events(self) -> list[TokenUsageEvent]:
-        """Load token usage events from Gemini ingestion table."""
+        """Load token events from the ingestion details table."""
         try:
             rows = self._connection.execute(
                 """
@@ -35,14 +35,14 @@ SELECT
     input_tokens,
     cached_input_tokens,
     output_tokens,
-    thoughts_tokens
-FROM gemini_usage_events
+    reasoning_output_tokens
+FROM codex_session_details
 ORDER BY event_timestamp, model_code
                 """
             ).fetchall()
         except duckdb.Error as exc:
             raise StatsRepositoryError(
-                "Failed to query gemini_usage_events. Run `gemini-token-usage ingest` first."
+                "Failed to query codex_session_details. Run `codex-token-usage ingest` first."
             ) from exc
 
         events: list[TokenUsageEvent] = []
@@ -57,7 +57,7 @@ ORDER BY event_timestamp, model_code
                     input_tokens=int(row[2]),
                     cached_input_tokens=int(row[3]),
                     output_tokens=int(row[4]),
-                    thoughts_tokens=int(row[5]),
+                    reasoning_output_tokens=int(row[5]),
                 )
             )
         return events

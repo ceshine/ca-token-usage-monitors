@@ -6,7 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from gemini_token_usage.preprocessing.resolve_input import resolve_jsonl_input, resolve_preprocess_input
+from coding_agent_usage_monitors.gemini_token_usage.preprocessing.resolve_input import (
+    resolve_jsonl_input,
+    resolve_preprocess_input,
+)
 
 
 def test_resolve_preprocess_input_prefers_raw_log_for_directory(tmp_path: Path) -> None:

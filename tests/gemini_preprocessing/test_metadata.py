@@ -9,9 +9,12 @@ from uuid import UUID
 import orjson
 import pytest
 
-from gemini_token_usage.preprocessing.convert import run_log_conversion
-from gemini_token_usage.preprocessing.metadata import PROJECT_METADATA_RECORD_TYPE, ensure_project_metadata_line
-from gemini_token_usage.preprocessing.simplify import run_log_simplification
+from coding_agent_usage_monitors.gemini_token_usage.preprocessing.convert import run_log_conversion
+from coding_agent_usage_monitors.gemini_token_usage.preprocessing.metadata import (
+    PROJECT_METADATA_RECORD_TYPE,
+    ensure_project_metadata_line,
+)
+from coding_agent_usage_monitors.gemini_token_usage.preprocessing.simplify import run_log_simplification
 
 
 def test_ensure_project_metadata_line_prepends_when_missing(tmp_path: Path) -> None:

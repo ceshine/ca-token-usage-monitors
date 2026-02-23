@@ -9,10 +9,10 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from opencode_token_usage.ingestion.errors import ParseError
-from opencode_token_usage.ingestion.repository import IngestionRepository
-from opencode_token_usage.ingestion.service import IngestionService
-from opencode_token_usage.ingestion.source_reader import SourceReader
+from coding_agent_usage_monitors.opencode_token_usage.ingestion.errors import ParseError
+from coding_agent_usage_monitors.opencode_token_usage.ingestion.repository import IngestionRepository
+from coding_agent_usage_monitors.opencode_token_usage.ingestion.service import IngestionService
+from coding_agent_usage_monitors.opencode_token_usage.ingestion.source_reader import SourceReader
 
 
 def test_service_ingests_incrementally_and_skips_when_unchanged(tmp_path: Path) -> None:

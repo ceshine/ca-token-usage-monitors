@@ -21,7 +21,7 @@ from .preprocessing.resolve_input import resolve_preprocess_input
 from .preprocessing.simplify import run_log_simplification
 from .stats.repository import StatsRepository, StatsRepositoryError
 from .stats.render import render_daily_usage_statistics
-from ca_token_monitor_internal.paths import get_default_database_path
+from coding_agent_usage_monitors.common.paths import get_default_database_path
 from .stats.service import StatsService
 
 LOGGER = logging.getLogger(__name__)

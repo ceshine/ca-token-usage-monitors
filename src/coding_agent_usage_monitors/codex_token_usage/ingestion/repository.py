@@ -10,7 +10,7 @@ from uuid import UUID
 
 import duckdb
 
-from ca_token_monitor_internal.database import parse_db_timestamp
+from coding_agent_usage_monitors.common.database import parse_db_timestamp
 from .schemas import IngestionFileState, SessionCheckpoint, SessionMetadataRow, TokenEventRow
 
 LOGGER = logging.getLogger(__name__)

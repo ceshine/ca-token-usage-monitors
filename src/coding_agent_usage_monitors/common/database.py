@@ -1,4 +1,4 @@
-"""Shared database utilities for coding-agent-token-monitor."""
+"""Shared database utilities for coding-agent-token-monitors."""
 
 from __future__ import annotations
 

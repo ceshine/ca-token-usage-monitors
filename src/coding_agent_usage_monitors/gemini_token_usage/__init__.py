@@ -11,12 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from importlib.metadata import version, PackageNotFoundError
-
-try:
-    __version__ = version("coding-agent-token-monitor")
-except PackageNotFoundError:
-    # This handles the case where the package is imported
-    # without being installed (e.g., local script execution)
-    __version__ = "unknown"

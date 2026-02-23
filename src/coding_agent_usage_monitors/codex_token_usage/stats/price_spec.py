@@ -1,6 +1,6 @@
 """Compatibility wrapper around shared model pricing utilities."""
 
-from model_pricing.price_spec import (
+from coding_agent_usage_monitors.common.model_pricing.price_spec import (
     DEFAULT_PRICE_CACHE_PATH,
     DEFAULT_PRICE_SPEC_URL,
     PriceSpecConfig,

@@ -10,7 +10,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import orjsonl
-from model_pricing import get_price_spec
+from coding_agent_usage_monitors.common.model_pricing import get_price_spec
 
 from .schemas import DailyUsageStatistics, TokenUsageEvent, UsageStats
 
