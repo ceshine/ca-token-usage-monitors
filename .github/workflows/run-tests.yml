@@ -31,4 +31,4 @@ jobs:
         run: uv sync --frozen
 
       - name: Run pytest suite
-        run: uv run pytest
+        run: uv run pytest -v
