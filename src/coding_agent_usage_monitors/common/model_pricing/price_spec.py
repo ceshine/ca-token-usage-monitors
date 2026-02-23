@@ -12,7 +12,7 @@ import urllib.request
 
 import orjson
 
-from ca_token_monitor_internal.paths import get_default_price_cache_path
+from coding_agent_usage_monitors.common.paths import get_default_price_cache_path
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_PRICE_SPEC_URL = (

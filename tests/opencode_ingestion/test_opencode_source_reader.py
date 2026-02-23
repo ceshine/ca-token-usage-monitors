@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from opencode_token_usage.ingestion.errors import SourceSchemaError
-from opencode_token_usage.ingestion.schemas import SourceCheckpoint
-from opencode_token_usage.ingestion.source_reader import SourceReader
+from coding_agent_usage_monitors.opencode_token_usage.ingestion.errors import SourceSchemaError
+from coding_agent_usage_monitors.opencode_token_usage.ingestion.schemas import SourceCheckpoint
+from coding_agent_usage_monitors.opencode_token_usage.ingestion.source_reader import SourceReader
 
 
 def test_source_reader_filters_rows_by_checkpoint_tuple(tmp_path: Path) -> None:

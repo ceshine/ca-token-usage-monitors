@@ -8,8 +8,8 @@ from pathlib import Path
 import orjson
 import pytest
 
-from gemini_token_usage.stats.schemas import TokenUsageEvent
-from gemini_token_usage.stats.service import StatsService, calculate_event_cost
+from coding_agent_usage_monitors.gemini_token_usage.stats.schemas import TokenUsageEvent
+from coding_agent_usage_monitors.gemini_token_usage.stats.service import StatsService, calculate_event_cost
 
 
 def test_calculate_event_cost_uses_above_200k_tier() -> None:

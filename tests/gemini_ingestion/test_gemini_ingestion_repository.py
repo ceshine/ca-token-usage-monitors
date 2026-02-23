@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import UUID
 
-from gemini_token_usage.ingestion.repository import IngestionRepository
+from coding_agent_usage_monitors.gemini_token_usage.ingestion.repository import IngestionRepository
 
 
 def test_repository_deactivate_sources_updates_active_rows_only(tmp_path: Path) -> None:

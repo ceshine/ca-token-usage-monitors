@@ -9,9 +9,13 @@ from uuid import UUID
 
 import pytest
 
-from codex_token_usage.ingestion.dedupe import dedupe_and_validate_token_rows
-from codex_token_usage.ingestion.errors import DeltaConsistencyError, DuplicateConflictError, MonotonicityError
-from codex_token_usage.ingestion.schemas import TokenEventRow, TokenUsageValues
+from coding_agent_usage_monitors.codex_token_usage.ingestion.dedupe import dedupe_and_validate_token_rows
+from coding_agent_usage_monitors.codex_token_usage.ingestion.errors import (
+    DeltaConsistencyError,
+    DuplicateConflictError,
+    MonotonicityError,
+)
+from coding_agent_usage_monitors.codex_token_usage.ingestion.schemas import TokenEventRow, TokenUsageValues
 
 
 def test_dedupe_keeps_first_duplicate_even_when_last_usage_differs() -> None:

@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from codex_token_usage.stats.schemas import TokenUsageEvent
-from codex_token_usage.stats.service import StatsService, calculate_event_cost
+from coding_agent_usage_monitors.codex_token_usage.stats.schemas import TokenUsageEvent
+from coding_agent_usage_monitors.codex_token_usage.stats.service import StatsService, calculate_event_cost
 
 
 def test_calculate_event_cost_uses_above_200k_tier() -> None:

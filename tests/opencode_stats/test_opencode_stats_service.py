@@ -6,8 +6,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from opencode_token_usage.stats.schemas import TokenUsageEvent
-from opencode_token_usage.stats.service import StatsService, calculate_event_cost, resolve_pricing_model_name
+from coding_agent_usage_monitors.opencode_token_usage.stats.schemas import TokenUsageEvent
+from coding_agent_usage_monitors.opencode_token_usage.stats.service import (
+    StatsService,
+    calculate_event_cost,
+    resolve_pricing_model_name,
+)
 
 
 def test_resolve_pricing_model_name_applies_rule_order() -> None:

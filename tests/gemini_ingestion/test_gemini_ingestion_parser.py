@@ -9,9 +9,13 @@ from uuid import UUID
 import orjson
 import pytest
 
-from gemini_token_usage.ingestion.errors import AppendOnlyViolationError, DuplicateEventError, MetadataValidationError
-from gemini_token_usage.ingestion.parser import parse_usage_jsonl
-from gemini_token_usage.ingestion.schemas import SourceCheckpoint
+from coding_agent_usage_monitors.gemini_token_usage.ingestion.errors import (
+    AppendOnlyViolationError,
+    DuplicateEventError,
+    MetadataValidationError,
+)
+from coding_agent_usage_monitors.gemini_token_usage.ingestion.parser import parse_usage_jsonl
+from coding_agent_usage_monitors.gemini_token_usage.ingestion.schemas import SourceCheckpoint
 
 
 def test_parse_usage_jsonl_applies_checkpoint_with_model_tiebreak(tmp_path: Path) -> None:

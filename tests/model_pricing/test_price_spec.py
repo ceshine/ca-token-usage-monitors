@@ -10,7 +10,7 @@ from typing import Any
 import orjson
 import pytest
 
-from model_pricing import price_spec as price_spec_module
+from coding_agent_usage_monitors.common.model_pricing import price_spec as price_spec_module
 
 
 def test_get_price_spec_uses_fresh_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

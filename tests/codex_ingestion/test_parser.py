@@ -9,9 +9,9 @@ from uuid import UUID
 import orjson
 import pytest
 
-from codex_token_usage.ingestion.errors import ModelAttributionError, ParseError
-from codex_token_usage.ingestion.parser import parse_session_file, parse_session_identity
-from codex_token_usage.ingestion.schemas import SessionCheckpoint
+from coding_agent_usage_monitors.codex_token_usage.ingestion.errors import ModelAttributionError, ParseError
+from coding_agent_usage_monitors.codex_token_usage.ingestion.parser import parse_session_file, parse_session_identity
+from coding_agent_usage_monitors.codex_token_usage.ingestion.schemas import SessionCheckpoint
 
 
 def test_parse_session_file_extracts_rows_with_checkpoint_filter(tmp_path: Path) -> None:

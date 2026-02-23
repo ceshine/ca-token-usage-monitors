@@ -10,7 +10,7 @@ from typing import Any
 
 import duckdb
 
-from ca_token_monitor_internal.database import parse_db_timestamp
+from coding_agent_usage_monitors.common.database import parse_db_timestamp
 from .schemas import IngestionSourceRow, JsonlFileState, SourceCheckpoint, UsageEventRow
 
 

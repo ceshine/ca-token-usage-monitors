@@ -1,4 +1,4 @@
-"""DuckDB repository for OpenCode token usage statistics queries."""
+"""DuckDB repository for Gemini token usage statistics queries."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import duckdb
 
-from ca_token_monitor_internal.database import parse_db_timestamp
+from coding_agent_usage_monitors.common.database import parse_db_timestamp
 from .schemas import TokenUsageEvent
 
 
@@ -15,7 +15,7 @@ class StatsRepositoryError(RuntimeError):
 
 
 class StatsRepository:
-    """Read-only repository for OpenCode token usage events."""
+    """Read-only repository for Gemini token usage events."""
 
     def __init__(self, database_path: Path) -> None:
         self._connection = duckdb.connect(str(database_path), read_only=True)
@@ -25,43 +25,39 @@ class StatsRepository:
         self._connection.close()
 
     def fetch_token_events(self) -> list[TokenUsageEvent]:
-        """Load token events from OpenCode ingestion details table."""
+        """Load token usage events from Gemini ingestion table."""
         try:
             rows = self._connection.execute(
                 """
 SELECT
-    COALESCE(provider_code, 'unknown') AS provider_code,
     COALESCE(model_code, 'unknown') AS model_code,
-    CAST(COALESCE(message_completed_at, message_created_at) AS VARCHAR) AS event_timestamp,
+    CAST(event_timestamp AS VARCHAR) AS event_timestamp,
     input_tokens,
-    cache_read_tokens,
-    cache_write_tokens,
+    cached_input_tokens,
     output_tokens,
-    reasoning_tokens
-FROM opencode_message_usage
-ORDER BY event_timestamp, provider_code, model_code
+    thoughts_tokens
+FROM gemini_usage_events
+ORDER BY event_timestamp, model_code
                 """
             ).fetchall()
         except duckdb.Error as exc:
             raise StatsRepositoryError(
-                "Failed to query opencode_message_usage. Run `opencode-token-usage ingest` first."
+                "Failed to query gemini_usage_events. Run `gemini-token-usage ingest` first."
             ) from exc
 
         events: list[TokenUsageEvent] = []
         for row in rows:
-            event_timestamp = parse_db_timestamp(row[2])
+            event_timestamp = parse_db_timestamp(row[1])
             if event_timestamp is None:
                 continue
             events.append(
                 TokenUsageEvent(
-                    provider_code=str(row[0]),
-                    model_code=str(row[1]),
+                    model_code=str(row[0]),
                     event_timestamp=event_timestamp,
-                    input_tokens=int(row[3]),
-                    cache_read_tokens=int(row[4]),
-                    cache_write_tokens=int(row[5]),
-                    output_tokens=int(row[6]),
-                    reasoning_tokens=int(row[7]),
+                    input_tokens=int(row[2]),
+                    cached_input_tokens=int(row[3]),
+                    output_tokens=int(row[4]),
+                    thoughts_tokens=int(row[5]),
                 )
             )
         return events

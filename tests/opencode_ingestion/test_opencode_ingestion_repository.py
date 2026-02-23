@@ -7,8 +7,8 @@ from pathlib import Path
 
 import duckdb
 
-from opencode_token_usage.ingestion.repository import IngestionRepository
-from opencode_token_usage.ingestion.schemas import MessageUsageRow, SessionRow
+from coding_agent_usage_monitors.opencode_token_usage.ingestion.repository import IngestionRepository
+from coding_agent_usage_monitors.opencode_token_usage.ingestion.schemas import MessageUsageRow, SessionRow
 
 
 def test_repository_upserts_sessions_and_usage_and_updates_checkpoint(tmp_path: Path) -> None:

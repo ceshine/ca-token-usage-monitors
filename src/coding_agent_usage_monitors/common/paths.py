@@ -1,4 +1,4 @@
-"""Shared path utilities for coding-agent-token-monitor."""
+"""Shared path utilities for coding-agent-token-monitors."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ def get_default_database_path() -> Path:
         base_data_dir = Path(xdg_data_home).expanduser()
     else:
         base_data_dir = Path("~/.local/share").expanduser()
-    return base_data_dir / "coding-agent-token-monitor" / "token_usage.duckdb"
+    return base_data_dir / "coding-agent-token-monitors" / "token_usage.duckdb"
 
 
 def get_default_price_cache_path() -> Path:
@@ -23,7 +23,7 @@ def get_default_price_cache_path() -> Path:
         base_cache_dir = Path(xdg_cache_home).expanduser()
     else:
         base_cache_dir = Path("~/.cache").expanduser()
-    return base_cache_dir / "coding-agent-token-monitor" / "price_cache.json"
+    return base_cache_dir / "coding-agent-token-monitors" / "price_cache.json"
 
 
 def get_default_opencode_db_path() -> Path:

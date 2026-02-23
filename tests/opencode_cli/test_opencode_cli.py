@@ -7,7 +7,7 @@ from pathlib import Path
 import duckdb
 from typer.testing import CliRunner
 
-from opencode_token_usage.cli import TYPER_APP
+from coding_agent_usage_monitors.opencode_token_usage.cli import TYPER_APP
 
 
 def test_stats_command_prints_provider_and_model_breakdown(tmp_path: Path, monkeypatch) -> None:
@@ -42,7 +42,7 @@ def test_stats_command_prints_provider_and_model_breakdown(tmp_path: Path, monke
     )
 
     monkeypatch.setattr(
-        "opencode_token_usage.stats.service.get_price_spec",
+        "coding_agent_usage_monitors.opencode_token_usage.stats.service.get_price_spec",
         lambda: {
             "gpt-5": {
                 "input_cost_per_token": 0.001,
@@ -107,7 +107,7 @@ def test_stats_command_since_filters_older_days(tmp_path: Path, monkeypatch) -> 
             },
         ],
     )
-    monkeypatch.setattr("opencode_token_usage.stats.service.get_price_spec", lambda: {})
+    monkeypatch.setattr("coding_agent_usage_monitors.opencode_token_usage.stats.service.get_price_spec", lambda: {})
 
     runner = CliRunner()
     result = runner.invoke(
