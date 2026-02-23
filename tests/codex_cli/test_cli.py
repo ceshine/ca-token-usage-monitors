@@ -282,6 +282,7 @@ def test_stats_command_since_rejects_invalid_date(tmp_path: Path) -> None:
             "--since",
             "2026-02-99",
         ],
+        color=False,
     )
 
     assert result.exit_code == 2
