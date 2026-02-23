@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
@@ -218,14 +217,3 @@ DO UPDATE SET
                 for row in rows
             ],
         )
-
-
-def parse_db_timestamp(value: str) -> datetime:
-    """Parse DuckDB TIMESTAMPTZ string output into aware datetime."""
-    normalized = value.replace(" ", "T")
-    if normalized.endswith("+00"):
-        normalized = f"{normalized}:00"
-    parsed = datetime.fromisoformat(normalized)
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
-    return parsed

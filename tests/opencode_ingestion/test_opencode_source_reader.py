@@ -21,7 +21,7 @@ def test_source_reader_filters_rows_by_checkpoint_tuple(tmp_path: Path) -> None:
     reader = SourceReader(source_db)
     try:
         reader.ensure_schema()
-        rows = reader.iter_assistant_rows(SourceCheckpoint(last_time_updated_ms=2000, last_message_id="m2"))
+        rows = list(reader.iter_assistant_rows(SourceCheckpoint(last_time_updated_ms=2000, last_message_id="m2")))
     finally:
         reader.close()
 

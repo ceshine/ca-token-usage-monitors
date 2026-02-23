@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -53,19 +54,14 @@ WHERE json_extract(m.data, '$.role') = 'assistant'
             return None
         return int(row[0])
 
-    def iter_assistant_rows(self, checkpoint: SourceCheckpoint | None) -> list[SourceMessageRow]:
-        """Return assistant rows ordered by `(time_updated, id)` and filtered by checkpoint."""
-        checkpoint_values = (
-            [
-                checkpoint.last_time_updated_ms,
-                checkpoint.last_time_updated_ms,
-                checkpoint.last_message_id,
-            ]
-            if checkpoint is not None
-            else [None, None, None]
-        )
+    def iter_assistant_rows(self, checkpoint: SourceCheckpoint | None) -> Iterator[SourceMessageRow]:
+        """Yield assistant rows ordered by `(time_updated, id)` and filtered by checkpoint."""
+        params: dict[str, Any] = {
+            "last_time": checkpoint.last_time_updated_ms if checkpoint else None,
+            "last_id": checkpoint.last_message_id if checkpoint else None,
+        }
 
-        rows = self._connection.execute(
+        cursor = self._connection.execute(
             """
 SELECT
     m.id AS message_id,
@@ -83,16 +79,17 @@ JOIN session s ON s.id = m.session_id
 JOIN project p ON p.id = s.project_id
 WHERE json_extract(m.data, '$.role') = 'assistant'
   AND (
-    ? IS NULL
-    OR m.time_updated > ?
-    OR (m.time_updated = ? AND m.id > ?)
+    :last_time IS NULL
+    OR m.time_updated > :last_time
+    OR (m.time_updated = :last_time AND m.id > :last_id)
   )
 ORDER BY m.time_updated ASC, m.id ASC
             """,
-            [checkpoint_values[0], checkpoint_values[1], checkpoint_values[1], checkpoint_values[2]],
-        ).fetchall()
+            params,
+        )
 
-        return [_row_to_source_message(row) for row in rows]
+        for row in cursor:
+            yield _row_to_source_message(row)
 
 
 def _connect_read_only(source_db_path: Path) -> sqlite3.Connection:
