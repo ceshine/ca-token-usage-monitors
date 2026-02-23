@@ -21,11 +21,12 @@ from .preprocessing.resolve_input import resolve_preprocess_input
 from .preprocessing.simplify import run_log_simplification
 from .stats.repository import StatsRepository, StatsRepositoryError
 from .stats.render import render_daily_usage_statistics
+from ca_token_monitor_internal.paths import get_default_database_path
 from .stats.service import StatsService
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_ARCHIVE_FOLDER = Path("/tmp")
-DEFAULT_DATABASE_PATH = Path("data/token_usage.duckdb")
+DEFAULT_DATABASE_PATH = get_default_database_path()
 
 TYPER_APP = typer.Typer(help="Gemini token usage tooling.")
 

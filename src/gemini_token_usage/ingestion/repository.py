@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from uuid import UUID
 from pathlib import Path
-from datetime import UTC, datetime
 from contextlib import contextmanager
 from collections.abc import Iterator
 from typing import Any
 
 import duckdb
 
+from ca_token_monitor_internal.database import parse_db_timestamp
 from .schemas import IngestionSourceRow, JsonlFileState, SourceCheckpoint, UsageEventRow
 
 
@@ -274,7 +274,7 @@ def _row_to_source(row: tuple[Any, ...] | None) -> IngestionSourceRow | None:
         return None
 
     checkpoint: SourceCheckpoint | None = None
-    checkpoint_ts = _parse_db_timestamp(row[5])
+    checkpoint_ts = parse_db_timestamp(row[5])
     checkpoint_model = row[6]
     if checkpoint_ts is not None or checkpoint_model is not None:
         if checkpoint_ts is None or not isinstance(checkpoint_model, str) or not checkpoint_model:
@@ -288,18 +288,6 @@ def _row_to_source(row: tuple[Any, ...] | None) -> IngestionSourceRow | None:
         jsonl_file_path=str(row[1]),
         active=bool(row[2]),
         file_size_bytes=int(row[3]) if row[3] is not None else None,
-        file_mtime=_parse_db_timestamp(row[4]),
+        file_mtime=parse_db_timestamp(row[4]),
         checkpoint=checkpoint,
     )
-
-
-def _parse_db_timestamp(value: str | None) -> datetime | None:
-    if value is None:
-        return None
-    normalized = value.replace(" ", "T")
-    if normalized.endswith("+00"):
-        normalized = f"{normalized}:00"
-    parsed = datetime.fromisoformat(normalized)
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
-    return parsed

@@ -12,12 +12,16 @@ import urllib.request
 
 import orjson
 
+from ca_token_monitor_internal.paths import get_default_price_cache_path
+
 LOGGER = logging.getLogger(__name__)
 DEFAULT_PRICE_SPEC_URL = (
     "https://raw.githubusercontent.com/BerriAI/litellm/refs/heads/main/model_prices_and_context_window.json"
 )
-DEFAULT_PRICE_CACHE_PATH = Path("~/.gemini/prices.json").expanduser()
 _CACHE_PATH_UNSET = object()
+
+
+DEFAULT_PRICE_CACHE_PATH = get_default_price_cache_path()
 
 
 @dataclass(frozen=True)
