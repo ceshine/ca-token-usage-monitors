@@ -38,12 +38,6 @@
 - **Data Validation:** For complex data structures or API models, prefer Pydantic for validation and serialization.
 - **Strictness:** Aim for code that passes `pyright` with minimal ignores.
 
-### Data Handling (Polars)
-
-- **Schema Enforcement:** Always specify schemas when creating DataFrames from lists of dicts or loading from raw files to ensure type consistency.
-- **IPC/Arrow:** Prefer `write_ipc` and `read_ipc` (Arrow format) for persisting intermediate DataFrames to disk for performance and type preservation.
-- **Lazy Evaluation:** Use `lazy()` and `collect()` for complex transformations to allow Polars to optimize the execution plan.
-
 ### Logging Standards
 
 - **Standard Logger:** Initialize loggers using `LOGGER = logging.getLogger(__name__)` at the module level.
