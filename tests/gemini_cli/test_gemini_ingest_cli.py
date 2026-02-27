@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
 from uuid import UUID
@@ -15,12 +16,13 @@ from coding_agent_usage_monitors.gemini_token_usage.ingestion.repository import 
 
 def test_ingest_command_registers_and_ingests_new_source(tmp_path: Path) -> None:
     """`ingest` should prompt for new source registration and ingest events."""
+    recent_timestamp = _isoformat_utc_midnight(days_ago=0)
     jsonl_file = tmp_path / "telemetry.jsonl"
     _write_jsonl(
         jsonl_file,
         [
             _metadata(UUID("00000000-0000-0000-0000-000000000001")),
-            _api_response("2026-02-17T00:00:00Z", "gemini-2.5-pro"),
+            _api_response(recent_timestamp, "gemini-2.5-pro"),
         ],
     )
     database_path = tmp_path / "usage.duckdb"
@@ -42,12 +44,13 @@ def test_ingest_command_registers_and_ingests_new_source(tmp_path: Path) -> None
 
 def test_ingest_command_exits_nonzero_when_confirmation_declined(tmp_path: Path) -> None:
     """Declining required source registration should exit non-zero."""
+    recent_timestamp = _isoformat_utc_midnight(days_ago=0)
     jsonl_file = tmp_path / "telemetry.jsonl"
     _write_jsonl(
         jsonl_file,
         [
             _metadata(UUID("00000000-0000-0000-0000-000000000001")),
-            _api_response("2026-02-17T00:00:00Z", "gemini-2.5-pro"),
+            _api_response(recent_timestamp, "gemini-2.5-pro"),
         ],
     )
     database_path = tmp_path / "usage.duckdb"
@@ -65,12 +68,15 @@ def test_ingest_command_exits_nonzero_when_confirmation_declined(tmp_path: Path)
 
 def test_ingest_command_preprocesses_selected_paths_before_ingestion(tmp_path: Path) -> None:
     """`ingest` should preprocess telemetry.log inputs before ingestion."""
+    recent_timestamp = _isoformat_utc_midnight(days_ago=0)
+    stale_timestamp = _isoformat_utc_midnight(days_ago=30)
+    stale_day = stale_timestamp[:10]
     log_file = tmp_path / "telemetry.log"
     _write_concatenated_log(
         log_file,
         [
-            _api_response("2026-02-17T00:00:00Z", "gemini-2.5-pro"),
-            _api_response("2010-01-01T00:00:00Z", "gemini-2.5-pro"),
+            _api_response(recent_timestamp, "gemini-2.5-pro"),
+            _api_response(stale_timestamp, "gemini-2.5-pro"),
         ],
     )
     database_path = tmp_path / "usage.duckdb"
@@ -86,18 +92,19 @@ def test_ingest_command_preprocesses_selected_paths_before_ingestion(tmp_path: P
     assert "Converted" in result.stdout
     assert "sources_ingested=1" in result.stdout
     assert "Statistics (last 7 days):" in result.stdout
-    assert "2010-01-01" not in result.stdout
+    assert stale_day not in result.stdout
 
 
 def test_ingest_command_preprocesses_all_active_paths_before_ingestion(tmp_path: Path) -> None:
     """`ingest --all-active` should preprocess active source paths before ingestion."""
     project_id = UUID("00000000-0000-0000-0000-000000000001")
+    recent_timestamp = _isoformat_utc_midnight(days_ago=0)
     jsonl_file = tmp_path / "telemetry.jsonl"
     _write_jsonl(
         jsonl_file,
         [
             _metadata(project_id),
-            _api_response("2026-02-17T00:00:00Z", "gemini-2.5-pro"),
+            _api_response(recent_timestamp, "gemini-2.5-pro"),
         ],
     )
     database_path = tmp_path / "usage.duckdb"
@@ -156,3 +163,13 @@ def _write_concatenated_log(path: Path, rows: list[dict[str, object]]) -> None:
         for row in rows:
             handle.write(json.dumps(row, indent=2))
             handle.write("\n")
+
+
+def _datetime_utc_midnight(days_ago: int) -> datetime:
+    """Return UTC midnight for a day relative to now."""
+    return datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_ago)
+
+
+def _isoformat_utc_midnight(days_ago: int) -> str:
+    """Return UTC midnight timestamp in ISO 8601 format with `Z` suffix."""
+    return _datetime_utc_midnight(days_ago=days_ago).isoformat().replace("+00:00", "Z")

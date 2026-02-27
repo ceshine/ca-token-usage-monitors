@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import json
 from uuid import UUID
@@ -17,6 +17,7 @@ from coding_agent_usage_monitors.gemini_token_usage.ingestion.schemas import Usa
 
 def test_preprocess_converts_log_directory_without_stats(tmp_path: Path) -> None:
     """`preprocess` should convert telemetry.log into telemetry.jsonl."""
+    event_timestamp = _isoformat_utc_midnight(days_ago=0)
     source_log = tmp_path / "telemetry.log"
     _write_concatenated_log(
         source_log,
@@ -24,7 +25,7 @@ def test_preprocess_converts_log_directory_without_stats(tmp_path: Path) -> None
             {
                 "attributes": {
                     "event.name": "gemini_cli.api_response",
-                    "event.timestamp": "2026-02-17T00:00:00Z",
+                    "event.timestamp": event_timestamp,
                     "duration_ms": 100,
                     "input_token_count": 100,
                     "output_token_count": 10,
@@ -50,6 +51,7 @@ def test_preprocess_converts_log_directory_without_stats(tmp_path: Path) -> None
 
 def test_preprocess_with_stats_prints_statistics_tables(tmp_path: Path, monkeypatch) -> None:
     """`preprocess --stats` should render daily and overall stats tables."""
+    event_timestamp = _isoformat_utc_midnight(days_ago=0)
     jsonl_path = tmp_path / "telemetry.jsonl"
     with jsonl_path.open("wb") as handle:
         handle.write(
@@ -57,7 +59,7 @@ def test_preprocess_with_stats_prints_statistics_tables(tmp_path: Path, monkeypa
                 {
                     "attributes": {
                         "event.name": "gemini_cli.api_response",
-                        "event.timestamp": "2026-02-17T00:00:00Z",
+                        "event.timestamp": event_timestamp,
                         "model": "gemini-2.5-pro",
                         "input_token_count": 100,
                         "output_token_count": 10,
@@ -94,6 +96,7 @@ def test_preprocess_with_stats_prints_statistics_tables(tmp_path: Path, monkeypa
 
 def test_stats_command_prints_statistics_from_database(tmp_path: Path, monkeypatch) -> None:
     """`stats` should read events from DuckDB and render usage tables."""
+    event_timestamp = _datetime_utc_midnight(days_ago=0)
     database_path = tmp_path / "usage.duckdb"
     repository = IngestionRepository(database_path)
     try:
@@ -102,7 +105,7 @@ def test_stats_command_prints_statistics_from_database(tmp_path: Path, monkeypat
             [
                 UsageEventRow(
                     project_id=UUID("00000000-0000-0000-0000-000000000001"),
-                    event_timestamp=datetime(2026, 2, 17, 0, 0, tzinfo=UTC),
+                    event_timestamp=event_timestamp,
                     model_code="gemini-2.5-pro",
                     input_tokens=100,
                     cached_input_tokens=40,
@@ -137,6 +140,10 @@ def test_stats_command_prints_statistics_from_database(tmp_path: Path, monkeypat
 
 def test_stats_command_since_filters_older_dates(tmp_path: Path, monkeypatch) -> None:
     """`stats --since` should exclude usage rows before the given date."""
+    newer_timestamp = _datetime_utc_midnight(days_ago=0)
+    older_timestamp = _datetime_utc_midnight(days_ago=1)
+    newer_day = newer_timestamp.date().isoformat()
+    older_day = older_timestamp.date().isoformat()
     database_path = tmp_path / "usage.duckdb"
     repository = IngestionRepository(database_path)
     try:
@@ -145,7 +152,7 @@ def test_stats_command_since_filters_older_dates(tmp_path: Path, monkeypatch) ->
             [
                 UsageEventRow(
                     project_id=UUID("00000000-0000-0000-0000-000000000001"),
-                    event_timestamp=datetime(2026, 2, 16, 0, 0, tzinfo=UTC),
+                    event_timestamp=older_timestamp,
                     model_code="gemini-2.5-pro",
                     input_tokens=10,
                     cached_input_tokens=1,
@@ -155,7 +162,7 @@ def test_stats_command_since_filters_older_dates(tmp_path: Path, monkeypatch) ->
                 ),
                 UsageEventRow(
                     project_id=UUID("00000000-0000-0000-0000-000000000001"),
-                    event_timestamp=datetime(2026, 2, 17, 0, 0, tzinfo=UTC),
+                    event_timestamp=newer_timestamp,
                     model_code="gemini-2.5-pro",
                     input_tokens=20,
                     cached_input_tokens=2,
@@ -189,13 +196,23 @@ def test_stats_command_since_filters_older_dates(tmp_path: Path, monkeypatch) ->
             "--timezone",
             "UTC",
             "--since",
-            "2026-02-17",
+            newer_day,
         ],
     )
 
     assert result.exit_code == 0
-    assert "2026-02-16" not in result.stdout
-    assert "2026-02-17" in result.stdout
+    assert older_day not in result.stdout
+    assert newer_day in result.stdout
+
+
+def _datetime_utc_midnight(days_ago: int) -> datetime:
+    """Return UTC midnight for a day relative to now."""
+    return datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_ago)
+
+
+def _isoformat_utc_midnight(days_ago: int) -> str:
+    """Return UTC midnight timestamp in ISO 8601 format with `Z` suffix."""
+    return _datetime_utc_midnight(days_ago=days_ago).isoformat().replace("+00:00", "Z")
 
 
 def _write_concatenated_log(path: Path, rows: list[dict[str, object]]) -> None:
