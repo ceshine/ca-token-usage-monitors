@@ -96,8 +96,8 @@ def main(
 
     _ = temp_path.rename(source_path)
 
-    print(f"Before compaction: {_format_size(before_size)} ({before_size} bytes)")
-    print(f"After compaction:  {_format_size(after_size)} ({after_size} bytes)")
+    typer.echo(f"Before compaction: {_format_size(before_size)} ({before_size} bytes)")
+    typer.echo(f"After compaction:  {_format_size(after_size)} ({after_size} bytes)")
 
 
 if __name__ == "__main__":
