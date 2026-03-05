@@ -93,7 +93,7 @@ class StatsService:
 def calculate_event_cost(event: TokenUsageEvent, price_spec: dict[str, Any]) -> float:
     """Calculate USD cost for one usage event."""
     model_price_spec = price_spec.get(event.model_code, {})
-    non_cached_input_tokens = max(event.input_tokens - event.cached_input_tokens, 0)
+    non_cached_input_tokens = _non_cached_input_tokens(event.input_tokens, event.cached_input_tokens)
     output_billable_tokens = max(event.output_tokens, 0) + max(event.thoughts_tokens, 0)
 
     input_cost_per_token = model_price_spec.get("input_cost_per_token", 0.0)
@@ -142,12 +142,17 @@ def _parse_usage_event(entry: dict[str, Any]) -> TokenUsageEvent | None:
 
 def _accumulate_usage_stats(stats: UsageStats, event: TokenUsageEvent, cost: float) -> None:
     """Update aggregate stats with one event."""
-    stats.input_tokens += event.input_tokens
+    stats.input_tokens += _non_cached_input_tokens(event.input_tokens, event.cached_input_tokens)
     stats.output_tokens += event.output_tokens
     stats.cached_tokens += event.cached_input_tokens
     stats.thoughts_tokens += event.thoughts_tokens
     stats.count += 1
     stats.cost += cost
+
+
+def _non_cached_input_tokens(input_tokens: int, cached_input_tokens: int) -> int:
+    """Return input token count with cached tokens removed."""
+    return max(input_tokens - cached_input_tokens, 0)
 
 
 def _resolve_event_date(event_timestamp: datetime, timezone: ZoneInfo | None) -> date:

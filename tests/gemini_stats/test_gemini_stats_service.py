@@ -83,7 +83,7 @@ def test_collect_daily_statistics_aggregates_usage_and_cost(tmp_path: Path) -> N
 
     assert report.total_events == 2
     stats = report.overall_usage["gemini-2.5-pro"]
-    assert stats.input_tokens == 150
+    assert stats.input_tokens == 110
     assert stats.output_tokens == 30
     assert stats.cached_tokens == 40
     assert stats.thoughts_tokens == 5
