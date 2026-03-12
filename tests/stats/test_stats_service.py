@@ -51,8 +51,8 @@ def test_calculate_event_cost_returns_zero_for_unknown_model() -> None:
     assert calculate_event_cost(event, {}) == 0.0
 
 
-def test_calculate_event_cost_falls_back_to_gpt_5_2_codex_pricing() -> None:
-    """gpt-5.3-codex should temporarily use gpt-5.2-codex pricing when missing."""
+def test_calculate_event_cost_does_not_fall_back_for_missing_model() -> None:
+    """Missing model pricing should yield zero cost without fallbacks."""
     event = TokenUsageEvent(
         model_code="gpt-5.3-codex",
         event_timestamp=datetime(2026, 2, 15, 0, 0, tzinfo=UTC),
@@ -70,9 +70,8 @@ def test_calculate_event_cost_falls_back_to_gpt_5_2_codex_pricing() -> None:
     }
 
     cost = calculate_event_cost(event, price_spec)
-    expected = (80 * 0.001) + (10 * 0.002) + (20 * 0.0001)
 
-    assert cost == pytest.approx(expected)
+    assert cost == 0.0
 
 
 def test_collect_daily_statistics_uses_non_cached_input_tokens() -> None:
