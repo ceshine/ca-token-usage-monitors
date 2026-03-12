@@ -116,8 +116,15 @@ def _resolve_model_price_spec(model_code: str, price_spec: dict[str, Any]) -> di
     resolved = price_spec.get(model_code)
     if resolved is not None:
         return resolved
-    if model_code == "gpt-5.3-codex":
-        fallback = price_spec.get("gpt-5.2-codex")
-        if fallback is not None:
-            return fallback
+
+    # The hard-coded fallback for gpt-5.3-codex has been disabled because it is now
+    # available via the API and its pricing is published.
+    #
+    # This logic can be updated and re-enabled for a future model that is available
+    # only through ChatGPT OAuth and not through the API.
+    #
+    # if model_code == "gpt-5.3-codex":
+    #     fallback = price_spec.get("gpt-5.2-codex")
+    #     if fallback is not None:
+    #         return fallback
     return {}
