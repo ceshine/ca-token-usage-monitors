@@ -53,9 +53,9 @@ def _compact_database(source_path: Path, target_path: Path) -> None:
     try:
         source_sql = _sql_quote_path(source_path)
         target_sql = _sql_quote_path(target_path)
-        connection.execute(f"ATTACH '{source_sql}' AS source_db")
-        connection.execute(f"ATTACH '{target_sql}' AS target_db")
-        connection.execute("COPY FROM DATABASE source_db TO target_db")
+        _ = connection.execute(f"ATTACH '{source_sql}' AS source_db")
+        _ = connection.execute(f"ATTACH '{target_sql}' AS target_db")
+        _ = connection.execute("COPY FROM DATABASE source_db TO target_db")
     finally:
         connection.close()
 
