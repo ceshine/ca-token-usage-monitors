@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 import typer
 from rich.console import Console
 
+from coding_agent_usage_monitors.common.cli_utils import parse_since_date, parse_until_date
 from coding_agent_usage_monitors.common.paths import get_default_database_path
 
 from .ingestion.repository import IngestionRepository
@@ -130,6 +131,11 @@ def stats_command(
         "--since",
         help="Include only usage on/after this date (YYYY-MM-DD).",
     ),
+    until: str | None = typer.Option(
+        None,
+        "--until",
+        help="Include only usage before this date, exclusive (YYYY-MM-DD).",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable info-level logging."),
 ) -> None:
     """Aggregate and print daily token usage and costs from DuckDB."""
@@ -138,8 +144,11 @@ def stats_command(
         raise typer.BadParameter(f"Database file not found: {database_path}")
 
     resolved_timezone = _parse_timezone(timezone)
-    since_date = _parse_since_date(since)
-    report = _collect_stats_report(database_path=database_path, timezone=resolved_timezone, since=since_date)
+    since_date = parse_since_date(since)
+    until_date = parse_until_date(until)
+    report = _collect_stats_report(
+        database_path=database_path, timezone=resolved_timezone, since=since_date, until=until_date
+    )
 
     render_daily_usage_statistics(report, Console())
 
@@ -157,12 +166,13 @@ def _collect_stats_report(
     database_path: Path,
     timezone: ZoneInfo | None,
     since: date | None,
+    until: date | None = None,
 ):
     """Collect daily stats report from database events with optional date filtering."""
     repository: StatsRepository | None = None
     try:
         repository = StatsRepository(database_path)
-        service = StatsService(repository=repository, timezone=timezone, since=since)
+        service = StatsService(repository=repository, timezone=timezone, since=since, until=until)
         return service.collect_daily_statistics()
     except (StatsRepositoryError, RuntimeError) as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -179,16 +189,6 @@ def _parse_timezone(timezone: str | None) -> ZoneInfo | None:
         return ZoneInfo(timezone)
     except Exception as exc:
         raise typer.BadParameter(f"Invalid timezone: {timezone}.") from exc
-
-
-def _parse_since_date(since: str | None) -> date | None:
-    """Parse `--since` value into a date."""
-    if since is None:
-        return None
-    try:
-        return date.fromisoformat(since)
-    except ValueError as exc:
-        raise typer.BadParameter(f"Invalid --since value: {since}. Expected YYYY-MM-DD.") from exc
 
 
 def module_cli_entry_point():

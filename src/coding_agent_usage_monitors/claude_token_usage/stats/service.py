@@ -21,11 +21,13 @@ class StatsService:
         repository: StatsRepository,
         timezone: ZoneInfo | None = None,
         since: date | None = None,
+        until: date | None = None,
         price_spec: dict[str, Any] | None = None,
     ) -> None:
         self._repository = repository
         self._timezone = timezone
         self._since = since
+        self._until = until
         self._price_spec = price_spec if price_spec is not None else get_price_spec()
 
     def collect_daily_statistics(self) -> DailyUsageStatistics:
@@ -39,6 +41,8 @@ class StatsService:
         for event in events:
             event_date = _resolve_event_date(event.event_timestamp, self._timezone)
             if self._since is not None and event_date < self._since:
+                continue
+            if self._until is not None and event_date >= self._until:
                 continue
 
             event_cost = calculate_event_cost(event, self._price_spec)

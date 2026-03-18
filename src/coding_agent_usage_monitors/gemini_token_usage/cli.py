@@ -21,6 +21,7 @@ from .preprocessing.resolve_input import resolve_preprocess_input
 from .preprocessing.simplify import run_log_simplification
 from .stats.repository import StatsRepository, StatsRepositoryError
 from .stats.render import render_daily_usage_statistics
+from coding_agent_usage_monitors.common.cli_utils import parse_since_date, parse_until_date
 from coding_agent_usage_monitors.common.paths import get_default_database_path
 from .stats.service import StatsService
 
@@ -233,6 +234,11 @@ def stats_command(
         "--since",
         help="Include only usage on/after this date (YYYY-MM-DD).",
     ),
+    until: str | None = typer.Option(
+        None,
+        "--until",
+        help="Include only usage before this date, exclusive (YYYY-MM-DD).",
+    ),
 ) -> None:
     """Aggregate and print daily token usage and costs from DuckDB."""
     _configure_logging()
@@ -240,8 +246,11 @@ def stats_command(
         raise typer.BadParameter(f"Database file not found: {database_path}")
 
     timezone_info = _parse_timezone(timezone)
-    since_date = _parse_since_date(since)
-    report = _collect_stats_report(database_path=database_path, timezone=timezone_info, since_date=since_date)
+    since_date = parse_since_date(since)
+    until_date = parse_until_date(until)
+    report = _collect_stats_report(
+        database_path=database_path, timezone=timezone_info, since_date=since_date, until_date=until_date
+    )
     render_daily_usage_statistics(report=report, console=Console())
 
 
@@ -350,6 +359,7 @@ def _collect_stats_report(
     database_path: Path,
     timezone: ZoneInfo | None,
     since_date: date | None,
+    until_date: date | None = None,
 ):
     """Collect daily stats report from database events with optional date filtering."""
     repository: StatsRepository | None = None
@@ -358,6 +368,8 @@ def _collect_stats_report(
         events = repository.fetch_token_events()
         if since_date is not None:
             events = [event for event in events if _resolve_event_date(event.event_timestamp, timezone) >= since_date]
+        if until_date is not None:
+            events = [event for event in events if _resolve_event_date(event.event_timestamp, timezone) < until_date]
         return StatsService().collect_daily_statistics_from_events(events=events, timezone=timezone)
     except StatsRepositoryError as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -374,16 +386,6 @@ def _parse_timezone(timezone: str | None) -> ZoneInfo | None:
         return ZoneInfo(timezone)
     except Exception as exc:
         raise typer.BadParameter(f"Invalid timezone: {timezone}.") from exc
-
-
-def _parse_since_date(since: str | None) -> date | None:
-    """Parse `--since` value into a date."""
-    if since is None:
-        return None
-    try:
-        return date.fromisoformat(since)
-    except ValueError as exc:
-        raise typer.BadParameter(f"Invalid --since value: {since}. Expected YYYY-MM-DD.") from exc
 
 
 def _resolve_event_date(event_timestamp: datetime, timezone: ZoneInfo | None) -> date:
