@@ -28,8 +28,9 @@ Confirmed from local files at `~/.claude/projects/{project-hash}/{sessionId}.jso
 - **`speed` field**: present on some entries, values observed: `null`, `"standard"` (handle `"fast"` when encountered).
 - **`costUSD`**: never present in current logs.
 - **Models seen**: `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `<synthetic>` (all-zero usage, should be skipped).
-- **Subagent files**: at `{sessionId}/subagents/agent-{agentId}.jsonl`, have `isSidechain: true` and `agentId` field.
+- **Subagent files**: at `{sessionId}/subagents/agent-{agentId}.jsonl`, have `isSidechain: true` and `agentId` field. Every entry in a subagent file carries the same `agentId`; main session file entries have no `agentId`.
 - **Dedup key**: `message.id` + `requestId` (both always present on assistant entries).
+- **Streaming intermediates**: when extended thinking is active, Claude Code emits 2–3 assistant entries sharing the same `(message_id, requestId)`. Intermediates have `message.stop_reason == null` and low partial `output_tokens`; the final entry has `stop_reason` set (e.g. `"tool_use"`, `"end_turn"`) and the authoritative token counts.
 - **Session ID**: `sessionId` field on every entry (UUID string).
 - **No `~/.config/claude/projects/`** directory exists on this system (only `~/.claude/projects/`), but both are checked for portability.
 
@@ -97,10 +98,11 @@ CREATE TABLE IF NOT EXISTS claude_ingestion_files (
 
 ### 4.1 Session identity
 
-1. Scan entries for the first valid `assistant` entry with `sessionId`.
+1. Scan entries for the first entry with `sessionId`.
 2. Use `sessionId` as `session_id`.
-3. Extract `slug`, `cwd`, `version` from the same or subsequent entries if available.
-4. Derive `project_name` from the directory path after `projects/`.
+3. Extract `slug`, `cwd`, `version` from the same entry if available.
+4. Extract `agentId` from the same entry; present on subagent files, absent (None) on main session files.
+5. Derive `project_name` from the directory path after `projects/`.
 
 ### 4.2 Assistant entry filtering
 
@@ -123,11 +125,14 @@ An entry is a candidate usage event when:
 
 ### 4.5 Deduplication
 
+Claude Code emits multiple JSONL entries sharing the same `(message_id, request_id)` when a response involves extended thinking or streaming. Intermediates have `message.stop_reason == null` and carry partial token counts; the final entry has `stop_reason` set and the authoritative token counts.
+
 In-memory dedup during parsing:
 
-1. Track seen `(message_id, request_id)` tuples in a `dict`.
-2. Duplicate with same tokens: skip silently.
-3. Duplicate with different tokens: raise `DuplicateConflictError`.
+1. Track seen `(message_id, request_id)` pairs in a `dict[tuple, UsageEventRow]`.
+2. Duplicate with same tokens: skip silently (`duplicate_rows_skipped += 1`).
+3. Duplicate with different tokens and `stop_reason != null`: **replace** the stored row (final entry supersedes streaming partials).
+4. Duplicate with different tokens and `stop_reason == null`: skip silently (`duplicate_rows_skipped += 1`); a final entry is expected later.
 
 DB-level: `INSERT ... ON CONFLICT DO NOTHING` on `(session_id, message_id, request_id)`.
 
@@ -139,7 +144,7 @@ DB-level: `INSERT ... ON CONFLICT DO NOTHING` on `(session_id, message_id, reque
    - If unchanged since last successful ingestion, skip the file.
    - If changed or unseen, continue.
 4. Parse session identity from entries.
-5. Load per-session checkpoint from DB (`last_event_timestamp`, `last_message_id`, `last_request_id`) from the latest ingested row for that `session_id`.
+5. Load checkpoint from DB for `(session_id, agent_id)` — the latest ingested row matching both fields (NULL-safe). This scopes the checkpoint to the individual file: main session files use `agent_id = NULL`, each subagent file uses its own `agent_id`.
 6. Parse stream and build:
    - `session_metadata` row.
    - `candidate_usage_rows` filtered by checkpoint:
@@ -155,7 +160,7 @@ DB-level: `INSERT ... ON CONFLICT DO NOTHING` on `(session_id, message_id, reque
 Use a hybrid strategy:
 
 - File-level change pruning via `claude_ingestion_files`.
-- Session-level tail ingestion via checkpoint from `claude_usage_events`.
+- File-level tail ingestion via checkpoint scoped to `(session_id, agent_id)` from `claude_usage_events`.
 
 Checkpoint query:
 
@@ -165,10 +170,12 @@ SELECT
   message_id AS last_message_id,
   request_id AS last_request_id
 FROM claude_usage_events
-WHERE session_id = ?
+WHERE session_id = ? AND agent_id IS NOT DISTINCT FROM ?
 ORDER BY event_timestamp DESC, message_id DESC, request_id DESC
 LIMIT 1;
 ```
+
+The `IS NOT DISTINCT FROM` operator handles NULL equality correctly: a NULL `agent_id` (main session file) only matches rows where `agent_id IS NULL`, and a non-NULL `agent_id` (subagent file) only matches rows for that specific agent. This prevents a main session file's checkpoint from filtering out earlier-timestamped events in a subagent file that shares the same `session_id`.
 
 ## 7. Error Handling
 
@@ -178,7 +185,7 @@ Rules:
 - Skip non-assistant entries silently.
 - Skip `<synthetic>` model entries silently.
 - Skip assistant entries without `message.usage`.
-- Fail if duplicate dedup keys have conflicting token values.
+- Duplicate dedup keys with conflicting tokens: keep first if new entry has `stop_reason == null`; replace with new entry if `stop_reason != null`.
 - If session ID missing, mark file as failed and continue other files.
 - Emit counters:
   - files_scanned

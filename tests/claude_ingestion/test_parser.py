@@ -9,7 +9,6 @@ import orjson
 import pytest
 
 from coding_agent_usage_monitors.claude_token_usage.ingestion.errors import (
-    DuplicateConflictError,
     ParseError,
     SessionIdentityError,
 )
@@ -32,7 +31,7 @@ def test_parse_session_file_extracts_rows(tmp_path: Path) -> None:
         ],
     )
 
-    session_id, slug, cwd, version = parse_session_identity(session_file)
+    session_id, slug, cwd, version, agent_id = parse_session_identity(session_file)
     parsed = parse_session_file(session_file, session_id, checkpoint=None)
 
     assert len(parsed.usage_rows) == 2
@@ -55,7 +54,7 @@ def test_parse_session_file_skips_non_assistant(tmp_path: Path) -> None:
         ],
     )
 
-    session_id, _, _, _ = parse_session_identity(session_file)
+    session_id, _, _, _, _ = parse_session_identity(session_file)
     parsed = parse_session_file(session_file, session_id, checkpoint=None)
 
     assert len(parsed.usage_rows) == 1
@@ -79,7 +78,7 @@ def test_parse_session_file_skips_assistant_without_usage(tmp_path: Path) -> Non
         ],
     )
 
-    session_id, _, _, _ = parse_session_identity(session_file)
+    session_id, _, _, _, _ = parse_session_identity(session_file)
     parsed = parse_session_file(session_file, session_id, checkpoint=None)
 
     assert len(parsed.usage_rows) == 1
@@ -96,7 +95,7 @@ def test_parse_session_file_skips_synthetic_model(tmp_path: Path) -> None:
         ],
     )
 
-    session_id, _, _, _ = parse_session_identity(session_file)
+    session_id, _, _, _, _ = parse_session_identity(session_file)
     parsed = parse_session_file(session_file, session_id, checkpoint=None)
 
     assert len(parsed.usage_rows) == 1
@@ -113,7 +112,7 @@ def test_parse_session_file_handles_speed_fast(tmp_path: Path) -> None:
         ],
     )
 
-    session_id, _, _, _ = parse_session_identity(session_file)
+    session_id, _, _, _, _ = parse_session_identity(session_file)
     parsed = parse_session_file(session_file, session_id, checkpoint=None)
 
     assert parsed.usage_rows[0].model_code == "claude-sonnet-4-6-fast"
@@ -144,15 +143,15 @@ def test_parse_session_file_dedup_by_message_id_request_id(tmp_path: Path) -> No
         ],
     )
 
-    session_id, _, _, _ = parse_session_identity(session_file)
+    session_id, _, _, _, _ = parse_session_identity(session_file)
     parsed = parse_session_file(session_file, session_id, checkpoint=None)
 
     assert len(parsed.usage_rows) == 1
     assert parsed.duplicate_rows_skipped == 1
 
 
-def test_parse_session_file_dedup_conflict_raises(tmp_path: Path) -> None:
-    """Parser should raise on duplicate key with different tokens."""
+def test_parse_session_file_dedup_conflict_intermediate_skipped(tmp_path: Path) -> None:
+    """Duplicate with conflicting tokens and no stop_reason should be treated as intermediate and skipped."""
     session_file = tmp_path / "session.jsonl"
     _write_jsonl(
         session_file,
@@ -161,24 +160,62 @@ def test_parse_session_file_dedup_conflict_raises(tmp_path: Path) -> None:
                 "2026-03-15T00:00:01Z",
                 model="claude-sonnet-4-6",
                 input_t=100,
-                output_t=50,
+                output_t=8,
                 message_id="msg-dup",
                 request_id="req-dup",
             ),
             _assistant_event(
                 "2026-03-15T00:00:02Z",
                 model="claude-sonnet-4-6",
-                input_t=200,
-                output_t=50,
+                input_t=100,
+                output_t=168,
                 message_id="msg-dup",
                 request_id="req-dup",
             ),
         ],
     )
 
-    session_id, _, _, _ = parse_session_identity(session_file)
-    with pytest.raises(DuplicateConflictError):
-        parse_session_file(session_file, session_id, checkpoint=None)
+    session_id, _, _, _, _ = parse_session_identity(session_file)
+    parsed = parse_session_file(session_file, session_id, checkpoint=None)
+
+    assert len(parsed.usage_rows) == 1
+    assert parsed.duplicate_rows_skipped == 1
+    # First entry wins when the conflicting duplicate has no stop_reason.
+    assert parsed.usage_rows[0].usage.output_tokens == 8
+
+
+def test_parse_session_file_dedup_final_entry_supersedes(tmp_path: Path) -> None:
+    """Final entry (stop_reason set) should replace the earlier streaming partial."""
+    session_file = tmp_path / "session.jsonl"
+    _write_jsonl(
+        session_file,
+        [
+            _assistant_event(
+                "2026-03-15T00:00:01Z",
+                model="claude-sonnet-4-6",
+                input_t=3,
+                output_t=8,
+                message_id="msg-dup",
+                request_id="req-dup",
+            ),
+            _assistant_event(
+                "2026-03-15T00:00:02Z",
+                model="claude-sonnet-4-6",
+                input_t=3,
+                output_t=168,
+                message_id="msg-dup",
+                request_id="req-dup",
+                stop_reason="tool_use",
+            ),
+        ],
+    )
+
+    session_id, _, _, _, _ = parse_session_identity(session_file)
+    parsed = parse_session_file(session_file, session_id, checkpoint=None)
+
+    assert len(parsed.usage_rows) == 1
+    # Final entry supersedes the streaming partial.
+    assert parsed.usage_rows[0].usage.output_tokens == 168
 
 
 def test_parse_session_file_checkpoint_filters_old_rows(tmp_path: Path) -> None:
@@ -214,7 +251,7 @@ def test_parse_session_file_checkpoint_filters_old_rows(tmp_path: Path) -> None:
         ],
     )
 
-    session_id, _, _, _ = parse_session_identity(session_file)
+    session_id, _, _, _, _ = parse_session_identity(session_file)
     checkpoint = SessionCheckpoint(
         last_ts=datetime(2026, 3, 15, 0, 0, 2, tzinfo=UTC),
         last_message_id="msg-2",
@@ -228,6 +265,23 @@ def test_parse_session_file_checkpoint_filters_old_rows(tmp_path: Path) -> None:
     assert len(parsed.usage_rows) == 2
     assert parsed.usage_rows[0].message_id == "msg-2"
     assert parsed.usage_rows[1].message_id == "msg-3"
+
+
+def test_parse_session_identity_returns_agent_id_for_subagent_file(tmp_path: Path) -> None:
+    """Should return agent_id from subagent entries, None for main session."""
+    main_file = tmp_path / "session.jsonl"
+    _write_jsonl(
+        main_file, [_assistant_event("2026-03-15T00:00:01Z", model="claude-sonnet-4-6", input_t=10, output_t=5)]
+    )
+    _, _, _, _, agent_id = parse_session_identity(main_file)
+    assert agent_id is None
+
+    subagent_file = tmp_path / "subagent.jsonl"
+    event = _assistant_event("2026-03-15T00:00:01Z", model="claude-haiku-4-5-20251001", input_t=5, output_t=3)
+    event["agentId"] = "agent-abc123"
+    _write_jsonl(subagent_file, [event])
+    _, _, _, _, agent_id = parse_session_identity(subagent_file)
+    assert agent_id == "agent-abc123"
 
 
 def test_parse_session_identity_fails_on_malformed_json(tmp_path: Path) -> None:
@@ -279,7 +333,7 @@ def test_parse_session_file_extracts_sidechain_info(tmp_path: Path) -> None:
         ],
     )
 
-    session_id, _, _, _ = parse_session_identity(session_file)
+    session_id, _, _, _, _ = parse_session_identity(session_file)
     parsed = parse_session_file(session_file, session_id, checkpoint=None)
 
     assert len(parsed.usage_rows) == 1
@@ -295,7 +349,7 @@ def test_parse_session_file_handles_cache_tokens(tmp_path: Path) -> None:
     event["message"]["usage"]["cache_read_input_tokens"] = 20
     _write_jsonl(session_file, [event])
 
-    session_id, _, _, _ = parse_session_identity(session_file)
+    session_id, _, _, _, _ = parse_session_identity(session_file)
     parsed = parse_session_file(session_file, session_id, checkpoint=None)
 
     assert parsed.usage_rows[0].usage.cache_creation_input_tokens == 30
@@ -317,6 +371,7 @@ def _assistant_event(
     is_sidechain: bool = False,
     agent_id: str | None = None,
     session_id: str = "sess-001",
+    stop_reason: str | None = None,
 ) -> dict[str, object]:
     """Build an assistant entry with usage fields."""
     msg_id = message_id or f"msg-{timestamp}"
@@ -330,6 +385,7 @@ def _assistant_event(
             "id": msg_id,
             "model": model,
             "role": "assistant",
+            "stop_reason": stop_reason,
             "usage": {
                 "input_tokens": input_t,
                 "output_tokens": output_t,

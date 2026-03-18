@@ -112,11 +112,16 @@ WHERE session_file_path = ?
             file_mtime=file_mtime,
         )
 
-    def get_session_checkpoint(self, session_id: str) -> SessionCheckpoint | None:
-        """Fetch latest ingestion checkpoint for a session.
+    def get_session_checkpoint(self, session_id: str, agent_id: str | None) -> SessionCheckpoint | None:
+        """Fetch latest ingestion checkpoint for a session and agent scope.
+
+        Uses (session_id, agent_id) as the checkpoint key so that subagent
+        files (non-None agent_id) maintain independent checkpoints from the
+        main session file (agent_id=None).
 
         Args:
             session_id: Session ID string.
+            agent_id: Agent ID string, or None for the main session file.
 
         Returns:
             SessionCheckpoint if found, None otherwise.
@@ -125,11 +130,11 @@ WHERE session_file_path = ?
             """
 SELECT CAST(event_timestamp AS VARCHAR), message_id, request_id
 FROM claude_usage_events
-WHERE session_id = ?
+WHERE session_id = ? AND agent_id IS NOT DISTINCT FROM ?
 ORDER BY event_timestamp DESC, message_id DESC, request_id DESC
 LIMIT 1
             """,
-            [session_id],
+            [session_id, agent_id],
         ).fetchone()
         if row is None:
             return None

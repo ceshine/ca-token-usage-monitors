@@ -11,7 +11,7 @@ from typing import Any
 
 import orjson
 
-from .errors import DuplicateConflictError, ParseError, SessionIdentityError
+from .errors import ParseError, SessionIdentityError
 from .schemas import (
     ParsedSessionFile,
     SessionCheckpoint,
@@ -57,14 +57,15 @@ def discover_session_roots() -> list[Path]:
 
 def parse_session_identity(
     session_file_path: Path,
-) -> tuple[str, str | None, str | None, str | None]:
-    """Resolve session identity from the first assistant entry with a sessionId.
+) -> tuple[str, str | None, str | None, str | None, str | None]:
+    """Resolve session identity from the first entry with a sessionId.
 
     Args:
         session_file_path: Path to the JSONL session file.
 
     Returns:
-        Tuple of (session_id, slug, cwd, version).
+        Tuple of (session_id, slug, cwd, version, agent_id). agent_id is
+        non-None for subagent files (every entry carries a consistent agentId).
 
     Raises:
         SessionIdentityError: When session identity cannot be determined.
@@ -76,11 +77,13 @@ def parse_session_identity(
             slug = event.get("slug")
             cwd = event.get("cwd")
             version = event.get("version")
+            agent_id = event.get("agentId")
             return (
                 session_id,
                 slug if isinstance(slug, str) else None,
                 cwd if isinstance(cwd, str) else None,
                 version if isinstance(version, str) else None,
+                agent_id if isinstance(agent_id, str) else None,
             )
 
     raise SessionIdentityError(f"No entry with sessionId found in {session_file_path}.")
@@ -111,10 +114,8 @@ def parse_session_file(
 
     Raises:
         ParseError: When entry data is malformed (including missing message_id or request_id).
-        DuplicateConflictError: When duplicate (message_id, request_id) pairs have conflicting tokens.
     """
-    usage_rows: list[UsageEventRow] = []
-    seen_keys: dict[tuple[str, str], TokenUsageValues] = {}
+    seen_rows: dict[tuple[str, str], UsageEventRow] = {}
 
     usage_rows_raw = 0
     usage_rows_skipped_synthetic = 0
@@ -181,38 +182,57 @@ def parse_session_file(
             cache_read_input_tokens=cache_read,
         )
 
-        # In-memory dedup by (message_id, request_id)
-        key = (message_id, request_id)
-        if key in seen_keys:
-            existing = seen_keys[key]
-            if existing != usage:
-                raise DuplicateConflictError(
-                    f"Duplicate (message_id={message_id}, request_id={request_id}) in {session_file_path} at line {line_number} has conflicting token values: existing={existing}, new={usage}."
-                )
-            duplicate_rows_skipped += 1
-            continue
-
-        seen_keys[key] = usage
-
         # Sidechain / agent fields
         is_sidechain = bool(event.get("isSidechain"))
         agent_id = event.get("agentId")
         if not isinstance(agent_id, str):
             agent_id = None
 
-        usage_rows.append(
-            UsageEventRow(
-                session_id=session_id,
-                message_id=message_id,
-                request_id=request_id,
-                event_timestamp=event_timestamp,
-                event_line_number=line_number,
-                model_code=model_code,
-                is_sidechain=is_sidechain,
-                agent_id=agent_id,
-                usage=usage,
-            )
+        # In-memory dedup by (message_id, request_id).
+        # Claude Code emits intermediate streaming entries (stop_reason=null) followed by
+        # a final completed entry (stop_reason is not null) for the same request. The final
+        # entry carries the authoritative token counts, so we replace the stored row when
+        # the new entry has a non-null stop_reason. Intermediates with matching tokens are
+        # silently skipped; intermediates with conflicting tokens are also skipped because
+        # a subsequent final entry is expected to supersede them.
+        key = (message_id, request_id)
+        stop_reason = message.get("stop_reason")
+        if key in seen_rows:
+            existing_row = seen_rows[key]
+            if existing_row.usage == usage:
+                duplicate_rows_skipped += 1
+                continue
+            if stop_reason is not None:
+                # Final entry supersedes the earlier streaming partial.
+                seen_rows[key] = UsageEventRow(
+                    session_id=session_id,
+                    message_id=message_id,
+                    request_id=request_id,
+                    event_timestamp=event_timestamp,
+                    event_line_number=line_number,
+                    model_code=model_code,
+                    is_sidechain=is_sidechain,
+                    agent_id=agent_id,
+                    usage=usage,
+                )
+            else:
+                # Intermediate entry with conflicting tokens — a final entry is expected later.
+                duplicate_rows_skipped += 1
+            continue
+
+        seen_rows[key] = UsageEventRow(
+            session_id=session_id,
+            message_id=message_id,
+            request_id=request_id,
+            event_timestamp=event_timestamp,
+            event_line_number=line_number,
+            model_code=model_code,
+            is_sidechain=is_sidechain,
+            agent_id=agent_id,
+            usage=usage,
         )
+
+    usage_rows = list(seen_rows.values())
 
     metadata = SessionMetadataRow(
         session_id=session_id,

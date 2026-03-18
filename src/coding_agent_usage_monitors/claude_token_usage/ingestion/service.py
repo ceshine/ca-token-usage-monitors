@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .errors import (
-    DuplicateConflictError,
     ParseError,
     SessionIdentityError,
 )
@@ -44,9 +43,9 @@ class IngestionService:
                 continue
 
             try:
-                session_id, slug, cwd, version = parse_session_identity(session_file_path)
+                session_id, slug, cwd, version, agent_id = parse_session_identity(session_file_path)
                 project_name = derive_project_name(session_file_path, self._session_roots)
-                checkpoint = self._repository.get_session_checkpoint(session_id)
+                checkpoint = self._repository.get_session_checkpoint(session_id, agent_id)
                 parsed = parse_session_file(
                     session_file_path,
                     session_id=session_id,
@@ -69,7 +68,7 @@ class IngestionService:
                 counters.usage_rows_skipped_synthetic += parsed.usage_rows_skipped_synthetic
                 counters.usage_rows_skipped_before_checkpoint += parsed.usage_rows_skipped_before_checkpoint
                 counters.duplicate_rows_skipped += parsed.duplicate_rows_skipped
-            except (ParseError, SessionIdentityError, DuplicateConflictError) as exc:
+            except (ParseError, SessionIdentityError) as exc:
                 counters.parse_errors += 1
                 counters.failed_files.append(str(session_file_path))
                 LOGGER.error("Failed to ingest %s: %s", session_file_path, exc)
