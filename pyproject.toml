@@ -26,6 +26,7 @@ reportCallInDefaultInitializer = false
 codex-token-usage = "coding_agent_usage_monitors.codex_token_usage.cli:module_cli_entry_point"
 gemini-token-usage = "coding_agent_usage_monitors.gemini_token_usage.cli:module_cli_entry_point"
 opencode-token-usage = "coding_agent_usage_monitors.opencode_token_usage.cli:module_cli_entry_point"
+claude-token-usage = "coding_agent_usage_monitors.claude_token_usage.cli:module_cli_entry_point"
 
 [build-system]
 requires = ["hatchling"]
