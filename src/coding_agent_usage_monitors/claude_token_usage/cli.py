@@ -136,6 +136,11 @@ def stats_command(
         "--until",
         help="Include only usage before this date, exclusive (YYYY-MM-DD).",
     ),
+    cwd: Path | None = typer.Option(
+        None,
+        "--cwd",
+        help="Restrict to sessions whose working directory exactly matches this path.",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable info-level logging."),
 ) -> None:
     """Aggregate and print daily token usage and costs from DuckDB."""
@@ -146,8 +151,9 @@ def stats_command(
     resolved_timezone = _parse_timezone(timezone)
     since_date = parse_since_date(since)
     until_date = parse_until_date(until)
+    resolved_cwd = str(cwd.resolve()) if cwd is not None else None
     report = _collect_stats_report(
-        database_path=database_path, timezone=resolved_timezone, since=since_date, until=until_date
+        database_path=database_path, timezone=resolved_timezone, since=since_date, until=until_date, cwd=resolved_cwd
     )
 
     render_daily_usage_statistics(report, Console())
@@ -167,12 +173,13 @@ def _collect_stats_report(
     timezone: ZoneInfo | None,
     since: date | None,
     until: date | None = None,
+    cwd: str | None = None,
 ):
     """Collect daily stats report from database events with optional date filtering."""
     repository: StatsRepository | None = None
     try:
         repository = StatsRepository(database_path)
-        service = StatsService(repository=repository, timezone=timezone, since=since, until=until)
+        service = StatsService(repository=repository, timezone=timezone, since=since, until=until, cwd=cwd)
         return service.collect_daily_statistics()
     except (StatsRepositoryError, RuntimeError) as exc:
         raise typer.BadParameter(str(exc)) from exc

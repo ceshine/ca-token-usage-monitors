@@ -144,6 +144,6 @@ class _FakeStatsRepository:
     def __init__(self, events: list[TokenUsageEvent]) -> None:
         self._events = events
 
-    def fetch_token_events(self) -> list[TokenUsageEvent]:
+    def fetch_token_events(self, cwd: str | None = None) -> list[TokenUsageEvent]:
         """Return static token events."""
         return self._events

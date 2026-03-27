@@ -22,17 +22,37 @@ class StatsService:
         timezone: ZoneInfo | None = None,
         since: date | None = None,
         until: date | None = None,
+        cwd: str | None = None,
         price_spec: dict[str, Any] | None = None,
     ) -> None:
+        """Initialise the service with filtering options.
+
+        Args:
+            repository (StatsRepository): Data source for raw token usage events.
+            timezone (ZoneInfo | None): Timezone used to bucket events into calendar
+                days. Defaults to None, which uses the system local timezone.
+            since (date | None): Inclusive lower bound for event dates. Events before
+                this date are excluded. Defaults to None (no lower bound).
+            until (date | None): Exclusive upper bound for event dates. Events on or
+                after this date are excluded. Defaults to None (no upper bound).
+            cwd (str | None): Absolute working-directory path used to restrict results
+                to a specific project session. When provided, only events whose session
+                cwd exactly matches this string are included. Defaults to None (all
+                sessions).
+            price_spec (dict[str, Any] | None): Model pricing data keyed by model name.
+                Defaults to None, which loads the bundled price specification via
+                ``get_price_spec()``.
+        """
         self._repository = repository
         self._timezone = timezone
         self._since = since
         self._until = until
+        self._cwd = cwd
         self._price_spec = price_spec if price_spec is not None else get_price_spec()
 
     def collect_daily_statistics(self) -> DailyUsageStatistics:
         """Aggregate token usage and costs by day and model."""
-        events = self._repository.fetch_token_events()
+        events = self._repository.fetch_token_events(cwd=self._cwd)
         usage_by_model_day: dict[tuple[str, date], UsageStats] = defaultdict(UsageStats)
         daily_costs: dict[date, float] = defaultdict(float)
         overall_usage: dict[str, UsageStats] = defaultdict(UsageStats)
