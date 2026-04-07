@@ -31,12 +31,18 @@ def main() -> None:
     """Root CLI callback."""
 
 
-def _run_ingestion(database_path: Path, session_roots: list[Path] | None) -> IngestionCounters:
+def _run_ingestion(
+    database_path: Path,
+    session_roots: list[Path] | None,
+    refresh_metadata: bool = False,
+) -> IngestionCounters:
     """Run ingestion and return operation counters.
 
     Args:
         database_path: Path to DuckDB database.
         session_roots: Optional list of session root directories.
+        refresh_metadata: When True, bypass file-state cache and re-parse all
+            session metadata without duplicating usage events.
 
     Returns:
         IngestionCounters from the ingestion run.
@@ -47,7 +53,7 @@ def _run_ingestion(database_path: Path, session_roots: list[Path] | None) -> Ing
     repository = IngestionRepository(database_path)
     try:
         service = IngestionService(repository=repository, session_roots=session_roots)
-        ingest_stats = service.ingest()
+        ingest_stats = service.ingest(refresh_metadata=refresh_metadata)
         LOGGER.info("Finished ingesting Claude Code session files.")
         return ingest_stats
     finally:
@@ -62,11 +68,16 @@ def ingest_command(
         "-d",
         help="DuckDB file path for ingestion state and token details.",
     ),
+    refresh_metadata: bool = typer.Option(
+        False,
+        "--refresh-metadata",
+        help="Re-parse all session files to backfill missing metadata (cwd, version). Usage events are not duplicated.",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable info-level logging."),
 ) -> None:
     """Ingest Claude Code session token usage into DuckDB."""
     _configure_logging(verbose)
-    counters = _run_ingestion(database_path=database_path, session_roots=None)
+    counters = _run_ingestion(database_path=database_path, session_roots=None, refresh_metadata=refresh_metadata)
     _emit_summary(counters)
     _emit_last_7_days_stats(database_path=database_path, console=Console())
     if counters.failed_files:

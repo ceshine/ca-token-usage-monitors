@@ -58,7 +58,13 @@ def discover_session_roots() -> list[Path]:
 def parse_session_identity(
     session_file_path: Path,
 ) -> tuple[str, str | None, str | None, str | None, str | None]:
-    """Resolve session identity from the first entry with a sessionId.
+    """Resolve session identity by scanning entries until all metadata fields are found.
+
+    ``sessionId`` is captured from the first entry that carries it.
+    ``cwd``, ``version``, and ``slug`` may appear on a different entry type, so
+    the scan continues until all three are resolved or the file is exhausted.
+    ``agentId`` is read from the same entry as ``sessionId`` because subagent
+    files carry it consistently on every entry.
 
     Args:
         session_file_path: Path to the JSONL session file.
@@ -71,22 +77,43 @@ def parse_session_identity(
         SessionIdentityError: When session identity cannot be determined.
         ParseError: When JSON is malformed.
     """
-    for _line_number, event in _iter_json_events(session_file_path):
-        session_id = event.get("sessionId")
-        if session_id is not None and isinstance(session_id, str) and session_id:
-            slug = event.get("slug")
-            cwd = event.get("cwd")
-            version = event.get("version")
-            agent_id = event.get("agentId")
-            return (
-                session_id,
-                slug if isinstance(slug, str) else None,
-                cwd if isinstance(cwd, str) else None,
-                version if isinstance(version, str) else None,
-                agent_id if isinstance(agent_id, str) else None,
-            )
+    session_id: str | None = None
+    slug: str | None = None
+    cwd: str | None = None
+    version: str | None = None
+    agent_id: str | None = None
 
-    raise SessionIdentityError(f"No entry with sessionId found in {session_file_path}.")
+    for _line_number, event in _iter_json_events(session_file_path):
+        if session_id is None:
+            raw_sid = event.get("sessionId")
+            if raw_sid is not None and isinstance(raw_sid, str) and raw_sid:
+                session_id = raw_sid
+                raw_agent_id = event.get("agentId")
+                if isinstance(raw_agent_id, str):
+                    agent_id = raw_agent_id
+
+        if cwd is None:
+            raw_cwd = event.get("cwd")
+            if isinstance(raw_cwd, str):
+                cwd = raw_cwd
+
+        if version is None:
+            raw_version = event.get("version")
+            if isinstance(raw_version, str):
+                version = raw_version
+
+        if slug is None:
+            raw_slug = event.get("slug")
+            if isinstance(raw_slug, str):
+                slug = raw_slug
+
+        if session_id is not None and cwd is not None and version is not None and slug is not None:
+            break
+
+    if session_id is None:
+        raise SessionIdentityError(f"No entry with sessionId found in {session_file_path}.")
+
+    return (session_id, slug, cwd, version, agent_id)
 
 
 def parse_session_file(

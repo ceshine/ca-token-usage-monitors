@@ -147,6 +147,34 @@ LIMIT 1
             last_request_id=str(row[2]),
         )
 
+    def get_session_metadata(self, session_id: str) -> SessionMetadataRow | None:
+        """Fetch an existing session metadata row by session ID.
+
+        Args:
+            session_id: Session ID string.
+
+        Returns:
+            SessionMetadataRow if found, None otherwise.
+        """
+        row = self._connection.execute(
+            """
+SELECT project_name, slug, cwd, version, session_file_path
+FROM claude_session_metadata
+WHERE session_id = ?
+            """,
+            [session_id],
+        ).fetchone()
+        if row is None:
+            return None
+        return SessionMetadataRow(
+            session_id=session_id,
+            project_name=row[0],
+            slug=row[1],
+            cwd=row[2],
+            version=row[3],
+            session_file_path=str(row[4]),
+        )
+
     def upsert_session_metadata(self, metadata: SessionMetadataRow) -> None:
         """Insert or update session metadata row.
 

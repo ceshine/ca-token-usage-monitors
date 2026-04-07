@@ -12,7 +12,7 @@ from .errors import (
 )
 from .parser import derive_project_name, discover_session_roots, parse_session_file, parse_session_identity
 from .repository import IngestionRepository
-from .schemas import IngestionCounters, IngestionFileState
+from .schemas import IngestionCounters, IngestionFileState, SessionMetadataRow
 
 LOGGER = logging.getLogger(__name__)
 
@@ -24,8 +24,15 @@ class IngestionService:
         self._repository: IngestionRepository = repository
         self._session_roots: list[Path] = session_roots if session_roots is not None else discover_session_roots()
 
-    def ingest(self) -> IngestionCounters:
+    def ingest(self, refresh_metadata: bool = False) -> IngestionCounters:
         """Run ingestion over session files and return operation counters.
+
+        Args:
+            refresh_metadata: When True, re-parse session identity and upsert
+                metadata for every file, even unchanged ones. For files whose
+                file-state has not changed, only ``upsert_session_metadata`` is
+                called; ``insert_usage_events`` and ``upsert_file_state`` are
+                skipped because the events and file-state are already current.
 
         Returns:
             IngestionCounters with summary of ingestion run.
@@ -37,14 +44,35 @@ class IngestionService:
             counters.files_scanned += 1
             current_file_state = _build_file_state(session_file_path)
             prior_file_state = self._repository.get_file_state(str(session_file_path))
+            file_unchanged = _file_state_matches(prior_file_state, current_file_state)
 
-            if _file_state_matches(prior_file_state, current_file_state):
+            if not refresh_metadata and file_unchanged:
                 counters.files_skipped_unchanged += 1
                 continue
 
             try:
                 session_id, slug, cwd, version, agent_id = parse_session_identity(session_file_path)
                 project_name = derive_project_name(session_file_path, self._session_roots)
+
+                if refresh_metadata and file_unchanged:
+                    # Only refresh the metadata row — skip event re-ingestion and
+                    # file-state update since neither has changed.
+                    metadata = SessionMetadataRow(
+                        session_id=session_id,
+                        project_name=project_name,
+                        slug=slug,
+                        cwd=cwd,
+                        version=version,
+                        session_file_path=str(session_file_path),
+                    )
+                    existing_metadata = self._repository.get_session_metadata(session_id)
+                    if metadata != existing_metadata:
+                        with self._repository.transaction():
+                            self._repository.upsert_session_metadata(metadata)
+                    counters.files_ingested += 1
+                    counters.sessions_ingested += 1
+                    continue
+
                 checkpoint = self._repository.get_session_checkpoint(session_id, agent_id)
                 parsed = parse_session_file(
                     session_file_path,
@@ -56,8 +84,10 @@ class IngestionService:
                     version=version,
                 )
 
+                existing_metadata = self._repository.get_session_metadata(session_id)
                 with self._repository.transaction():
-                    self._repository.upsert_session_metadata(parsed.metadata)
+                    if parsed.metadata != existing_metadata:
+                        self._repository.upsert_session_metadata(parsed.metadata)
                     self._repository.insert_usage_events(parsed.usage_rows)
                     self._repository.upsert_file_state(current_file_state)
 
