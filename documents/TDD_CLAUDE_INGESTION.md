@@ -1,6 +1,7 @@
 # Token Ingestion Technical Design (Claude Code Sessions -> DuckDB)
 
 Created: 2026-03-18
+Status: Completed
 
 ## 1. Scope
 

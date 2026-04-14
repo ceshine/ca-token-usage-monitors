@@ -1,7 +1,7 @@
 # Token Ingestion Technical Design (OpenCode SQLite -> DuckDB)
 
 Created: 2026-02-22
-Status: Draft
+Status: Completed
 
 ## 1. Scope
 
