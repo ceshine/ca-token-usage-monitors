@@ -31,7 +31,7 @@ repos:
         args: [--line-length=120]
 
   - repo: https://github.com/ceshine/lort
-    rev: v0.1.0 # replace with the latest tag
+    rev: v0.1.2 # replace with the latest tag
     hooks:
       # - id: lort        # check mode (recommended for CI)
       - id: lort-fix # fix mode (rewrites files in place)
