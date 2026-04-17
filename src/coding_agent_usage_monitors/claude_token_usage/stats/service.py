@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import UTC, date, datetime
-from typing import Any
 from zoneinfo import ZoneInfo
+from collections import defaultdict
+from typing import Any
 
 from coding_agent_usage_monitors.common.model_pricing import get_price_spec
 
+from .schemas import UsageStats, TokenUsageEvent, DailyUsageStatistics
 from .repository import StatsRepository
-from .schemas import DailyUsageStatistics, TokenUsageEvent, UsageStats
 
 
 class StatsService:
@@ -119,6 +119,10 @@ def calculate_event_cost(event: TokenUsageEvent, price_spec: dict[str, Any]) -> 
 
 def resolve_pricing_model_name(model_code: str) -> str:
     """Resolve canonical model key used for pricing lookup."""
+    # Temporary override for claude-opus-4.7, whose pricing info has not been added to the database yet
+    # The pricing is exactly the same as claude-opus-4.6
+    if model_code == "claude-opus-4-7":
+        return "claude-opus-4-6"
     return model_code
 
 
