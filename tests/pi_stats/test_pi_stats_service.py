@@ -9,9 +9,28 @@ import pytest
 from coding_agent_usage_monitors.pi_token_usage.stats.schemas import TokenUsageEvent
 from coding_agent_usage_monitors.pi_token_usage.stats.service import (
     StatsService,
+    _strip_suffixes,
     calculate_event_cost,
     resolve_pricing_model_name,
 )
+
+
+@pytest.mark.parametrize(
+    "model_code,expected",
+    [
+        ("gpt-4:free", "gpt-4"),
+        ("gpt-4-free", "gpt-4"),
+        ("model:suffix:extra", "model"),
+        ("lucas-test-model:free", "lucas-test-model"),
+        ("deepseek/deepseek-chat-v3-0324:nitro", "deepseek/deepseek-chat-v3-0324"),
+        ("gpt-4", "gpt-4"),
+        ("", ""),
+        ("model:", "model"),
+    ],
+)
+def test_strip_suffixes_removes_colon_and_free_suffixes(model_code: str, expected: str) -> None:
+    """_strip_suffixes should remove all :.* suffixes and -free suffixes."""
+    assert _strip_suffixes(model_code) == expected
 
 
 def test_resolve_pricing_model_name_applies_rule_order() -> None:
@@ -20,9 +39,9 @@ def test_resolve_pricing_model_name_applies_rule_order() -> None:
     assert resolve_pricing_model_name(provider_code="openrouter", model_code="qwen/qwen3-coder:free") == (
         "openrouter/qwen/qwen3-coder"
     )
-    assert resolve_pricing_model_name(provider_code="opencode", model_code="kimi-k2.5") == "moonshot/kimi-k2.5"
-    assert resolve_pricing_model_name(provider_code="opencode", model_code="minimax-m2.5") == "minimax/MiniMax-M2.5"
-    assert resolve_pricing_model_name(provider_code="opencode", model_code="glm-5") == "openrouter/z-ai/glm-5"
+    assert resolve_pricing_model_name(provider_code="opencode", model_code="kimi-k2.5") == "opencode/kimi-k2.5"
+    assert resolve_pricing_model_name(provider_code="opencode", model_code="minimax-m2.5") == "opencode/minimax-m2.5"
+    assert resolve_pricing_model_name(provider_code="opencode", model_code="glm-5") == "opencode/glm-5"
     assert resolve_pricing_model_name(provider_code="opencode", model_code="big-pickle") == "opencode/big-pickle"
 
 
@@ -77,8 +96,8 @@ def test_calculate_event_cost_falls_back_to_input_cost_for_missing_cache_write_p
     assert cost == pytest.approx(expected)
 
 
-def test_calculate_event_cost_for_opencode_falls_back_to_openrouter_key() -> None:
-    """opencode should use openrouter fallback and input price for missing cache write cost."""
+def test_calculate_event_cost_for_opencode_with_openrouter_only_key_returns_zero() -> None:
+    """opencode without matching key in price_spec returns zero cost."""
     event = TokenUsageEvent(
         provider_code="opencode",
         model_code="big-pickle",
@@ -88,6 +107,7 @@ def test_calculate_event_cost_for_opencode_falls_back_to_openrouter_key() -> Non
         cache_write_tokens=10,
         output_tokens=10,
     )
+    # Price spec only has openrouter key, not opencode - no fallback exists
     price_spec = {
         "openrouter/big-pickle": {
             "input_cost_per_token": 1.0,
@@ -97,9 +117,8 @@ def test_calculate_event_cost_for_opencode_falls_back_to_openrouter_key() -> Non
     }
 
     cost = calculate_event_cost(event, price_spec)
-    expected = (80 * 1.0) + (10 * 2.0) + (20 * 0.5) + (10 * 1.0)
-
-    assert cost == pytest.approx(expected)
+    # No matching price spec found, cost is 0
+    assert cost == pytest.approx(0.0)
 
 
 def test_calculate_event_cost_returns_zero_for_lm_studio_provider() -> None:

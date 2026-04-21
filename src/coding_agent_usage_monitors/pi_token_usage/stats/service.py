@@ -103,7 +103,7 @@ def calculate_event_cost(event: TokenUsageEvent, price_spec: dict[str, Any]) -> 
 
 def resolve_pricing_model_name(provider_code: str, model_code: str) -> str:
     """Resolve canonical model key used for pricing lookup."""
-    normalized_model = _strip_free_suffixes(model_code)
+    normalized_model = _strip_suffixes(model_code)
 
     if normalized_model.startswith("gpt"):
         return normalized_model
@@ -149,12 +149,11 @@ def _resolve_model_price_spec(provider_code: str, model_code: str, price_spec: d
     return {}
 
 
-def _strip_free_suffixes(model_code: str) -> str:
-    """Strip known free-tier suffixes from a model code."""
+def _strip_suffixes(model_code: str) -> str:
+    """Strip :.* suffixes and -free suffixes from a model code."""
     stripped = model_code
-    while stripped.endswith(":free") or stripped.endswith("-free"):
-        if stripped.endswith(":free"):
-            stripped = stripped[: -len(":free")]
-        elif stripped.endswith("-free"):
-            stripped = stripped[: -len("-free")]
+    while ":" in stripped:
+        stripped = stripped.rsplit(":", 1)[0]
+    while stripped.endswith("-free"):
+        stripped = stripped[: -len("-free")]
     return stripped

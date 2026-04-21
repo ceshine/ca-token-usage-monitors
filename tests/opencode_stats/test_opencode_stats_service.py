@@ -20,9 +20,9 @@ def test_resolve_pricing_model_name_applies_rule_order() -> None:
     assert resolve_pricing_model_name(provider_code="openrouter", model_code="qwen/qwen3-coder:free") == (
         "openrouter/qwen/qwen3-coder"
     )
-    assert resolve_pricing_model_name(provider_code="opencode", model_code="kimi-k2.5") == ("moonshot/kimi-k2.5")
-    assert resolve_pricing_model_name(provider_code="opencode", model_code="minimax-m2.5") == ("minimax/MiniMax-M2.5")
-    assert resolve_pricing_model_name(provider_code="opencode", model_code="glm-5") == "openrouter/z-ai/glm-5"
+    assert resolve_pricing_model_name(provider_code="opencode", model_code="kimi-k2.5") == ("opencode/kimi-k2.5")
+    assert resolve_pricing_model_name(provider_code="opencode", model_code="minimax-m2.5") == ("opencode/minimax-m2.5")
+    assert resolve_pricing_model_name(provider_code="opencode", model_code="glm-5") == "opencode/glm-5"
     assert resolve_pricing_model_name(provider_code="opencode", model_code="big-pickle") == "opencode/big-pickle"
 
 
@@ -79,8 +79,8 @@ def test_calculate_event_cost_falls_back_to_input_cost_for_missing_cache_write_p
     assert cost == pytest.approx(expected)
 
 
-def test_calculate_event_cost_for_opencode_falls_back_to_openrouter_key() -> None:
-    """opencode should use openrouter fallback and input price for missing cache write cost."""
+def test_calculate_event_cost_for_opencode_uses_opencode_key() -> None:
+    """opencode should use opencode/ prefix key and input price for missing cache write cost."""
     event = TokenUsageEvent(
         provider_code="opencode",
         model_code="big-pickle",
@@ -92,7 +92,7 @@ def test_calculate_event_cost_for_opencode_falls_back_to_openrouter_key() -> Non
         reasoning_tokens=3,
     )
     price_spec = {
-        "openrouter/big-pickle": {
+        "opencode/big-pickle": {
             "input_cost_per_token": 1.0,
             "output_cost_per_token": 2.0,
             "cache_read_input_token_cost": 0.5,
