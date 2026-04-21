@@ -112,12 +112,6 @@ def resolve_pricing_model_name(provider_code: str, model_code: str) -> str:
         return f"openrouter/{normalized_model}"
 
     if provider_code == "opencode":
-        if normalized_model.startswith("kimi"):
-            return f"moonshot/{normalized_model}"
-        if normalized_model.startswith("minimax"):
-            return f"minimax/{normalized_model.replace('minimax-m', 'MiniMax-M')}"
-        if normalized_model.startswith("glm"):
-            return f"openrouter/z-ai/{normalized_model}"
         if normalized_model == "grok-code":
             return "xai/grok-code-fast-1"
         return f"opencode/{normalized_model}"
@@ -152,10 +146,6 @@ def _resolve_model_price_spec(provider_code: str, model_code: str, price_spec: d
     resolved = price_spec.get(resolved_name)
     if isinstance(resolved, dict):
         return resolved
-    if provider_code == "opencode":
-        fallback = price_spec.get(f"openrouter/{_strip_free_suffixes(model_code)}")
-        if isinstance(fallback, dict):
-            return fallback
     return {}
 
 

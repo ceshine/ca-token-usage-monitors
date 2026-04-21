@@ -109,7 +109,7 @@ def calculate_event_cost(event: TokenUsageEvent, price_spec: dict[str, Any]) -> 
             cache_write_cost_per_token,
         )
 
-    return (
+    return float(
         (event.input_tokens * input_cost_per_token)
         + (event.output_tokens * output_cost_per_token)
         + (event.cache_read_input_tokens * cache_read_cost_per_token)

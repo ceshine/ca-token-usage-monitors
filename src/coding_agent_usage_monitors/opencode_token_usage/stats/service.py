@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import UTC, date, datetime
-from typing import Any
 from zoneinfo import ZoneInfo
+from collections import defaultdict
+from typing import Any
 
 from coding_agent_usage_monitors.common.model_pricing import get_price_spec
 
+from .schemas import UsageStats, TokenUsageEvent, DailyUsageStatistics
 from .repository import StatsRepository
-from .schemas import DailyUsageStatistics, TokenUsageEvent, UsageStats
 
 
 class StatsService:
@@ -114,12 +114,13 @@ def resolve_pricing_model_name(provider_code: str, model_code: str) -> str:
         return f"openrouter/{normalized_model}"
 
     if provider_code == "opencode":
-        if normalized_model.startswith("kimi"):
-            return f"moonshot/{normalized_model}"
-        if normalized_model.startswith("minimax"):
+        # Supporting legacy models
+        if normalized_model.startswith("minimax-m2.1"):
             return f"minimax/{normalized_model.replace('minimax-m', 'MiniMax-M')}"
-        if normalized_model.startswith("glm"):
+        if normalized_model.startswith("glm-4.7"):
             return f"openrouter/z-ai/{normalized_model}"
+        if normalized_model.startswith("mimo-v2"):
+            return f"openrouter/xiaomi/{normalized_model}"
         if normalized_model == "grok-code":
             return "xai/grok-code-fast-1"
         return f"opencode/{normalized_model}"
@@ -160,10 +161,6 @@ def _resolve_model_price_spec(provider_code: str, model_code: str, price_spec: d
     resolved = price_spec.get(resolved_name)
     if isinstance(resolved, dict):
         return resolved
-    if provider_code == "opencode":
-        fallback = price_spec.get(f"openrouter/{_strip_free_suffixes(model_code)}")
-        if isinstance(fallback, dict):
-            return fallback
     return {}
 
 

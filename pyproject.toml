@@ -37,6 +37,9 @@ build-backend = "hatchling.build"
 packages = [
     "src/coding_agent_usage_monitors",
 ]
+include = [
+    "src/coding_agent_usage_monitors/common/model_pricing/*.json",
+]
 
 
 [tool.ruff]
