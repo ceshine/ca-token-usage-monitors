@@ -92,7 +92,8 @@ def calculate_event_cost(event: TokenUsageEvent, price_spec: dict[str, Any]) -> 
             cache_write_cost_per_token,
         )
 
-    billable_input_tokens = _non_cached_input_tokens(event.input_tokens, event.cache_read_tokens)
+    # OpenCode reports input_tokens without cache_read_tokens included
+    billable_input_tokens = event.input_tokens
     billable_output_tokens = _non_reasoning_output_tokens(event.output_tokens, event.reasoning_tokens)
     return (
         (billable_input_tokens * input_cost_per_token)
@@ -134,7 +135,8 @@ def resolve_pricing_model_name(provider_code: str, model_code: str) -> str:
 
 def _accumulate_usage_stats(stats: UsageStats, event: TokenUsageEvent, cost: float) -> None:
     """Update aggregate stats with one event."""
-    stats.input_tokens += _non_cached_input_tokens(event.input_tokens, event.cache_read_tokens)
+    # OpenCode reports input_tokens without cache_read_tokens included
+    stats.input_tokens += event.input_tokens
     stats.output_tokens += _non_reasoning_output_tokens(event.output_tokens, event.reasoning_tokens)
     stats.cached_tokens += event.cache_read_tokens
     stats.cache_write_tokens += event.cache_write_tokens
@@ -147,11 +149,6 @@ def _resolve_event_date(event_timestamp: datetime, timezone: ZoneInfo | None) ->
     """Resolve event date in the selected timezone (or local system timezone)."""
     normalized = event_timestamp if event_timestamp.tzinfo is not None else event_timestamp.replace(tzinfo=UTC)
     return normalized.astimezone(timezone).date()
-
-
-def _non_cached_input_tokens(input_tokens: int, cache_read_tokens: int) -> int:
-    """Return input token count with cache-read tokens removed."""
-    return max(input_tokens - cache_read_tokens, 0)
 
 
 def _non_reasoning_output_tokens(output_tokens: int, reasoning_tokens: int) -> int:
