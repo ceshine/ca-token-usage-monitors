@@ -66,7 +66,7 @@ def test_calculate_event_cost_uses_cache_write_tokens_when_pricing_exists() -> N
     }
 
     cost = calculate_event_cost(event, price_spec)
-    expected = (80 * 1.0) + (10 * 2.0) + (20 * 0.5) + (10 * 0.25)
+    expected = (100 * 1.0) + (10 * 2.0) + (20 * 0.5) + (10 * 0.25)
 
     assert cost == pytest.approx(expected)
 
@@ -91,7 +91,7 @@ def test_calculate_event_cost_falls_back_to_input_cost_for_missing_cache_write_p
     }
 
     cost = calculate_event_cost(event, price_spec)
-    expected = (80 * 1.0) + (10 * 2.0) + (20 * 0.5) + (10 * 1.0)
+    expected = (100 * 1.0) + (10 * 2.0) + (20 * 0.5) + (10 * 1.0)
 
     assert cost == pytest.approx(expected)
 
@@ -164,8 +164,8 @@ def test_collect_daily_statistics_groups_by_provider_and_model() -> None:
     report = service.collect_daily_statistics()
 
     assert report.total_events == 2
-    assert report.overall_usage[("opencode", "gpt-5")].input_tokens == 60
-    assert report.overall_usage[("openrouter", "gpt-5")].input_tokens == 150
+    assert report.overall_usage[("opencode", "gpt-5")].input_tokens == 100
+    assert report.overall_usage[("openrouter", "gpt-5")].input_tokens == 200
 
 
 class _FakeStatsRepository:

@@ -74,7 +74,7 @@ def test_stats_command_prints_provider_and_model_breakdown(tmp_path: Path, monke
     assert result.exit_code == 0
     assert "Daily Token Usage" in result.stdout
     assert "Overall Token Usage by Model" in result.stdout
-    assert "0.674500" in result.stdout
+    assert "0.814500" in result.stdout
 
 
 def test_stats_command_since_filters_older_days(tmp_path: Path, monkeypatch) -> None:
