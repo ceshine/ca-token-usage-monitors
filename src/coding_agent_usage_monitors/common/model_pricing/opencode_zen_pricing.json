@@ -162,6 +162,12 @@
     "cache_read_input_token_cost": 0.00000006,
     "cache_creation_input_token_cost": 0.000000375
   },
+  "opencode/minimax-m2.7": {
+    "input_cost_per_token": 0.0000003,
+    "output_cost_per_token": 0.0000012,
+    "cache_read_input_token_cost": 0.00000006,
+    "cache_creation_input_token_cost": 0.000000375
+  },
   "opencode/glm-5.1": {
     "input_cost_per_token": 0.0000014,
     "output_cost_per_token": 0.0000044,
