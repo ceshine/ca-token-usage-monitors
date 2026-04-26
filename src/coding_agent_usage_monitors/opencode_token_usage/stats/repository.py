@@ -6,8 +6,8 @@ from pathlib import Path
 
 import duckdb
 
-from coding_agent_usage_monitors.common.database import parse_db_timestamp
 from .schemas import TokenUsageEvent
+from coding_agent_usage_monitors.common.database import parse_db_timestamp
 
 
 class StatsRepositoryError(RuntimeError):

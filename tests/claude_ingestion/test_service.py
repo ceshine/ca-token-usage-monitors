@@ -8,8 +8,8 @@ from pathlib import Path
 import duckdb
 import orjson
 
-from coding_agent_usage_monitors.claude_token_usage.ingestion.repository import IngestionRepository
 from coding_agent_usage_monitors.claude_token_usage.ingestion.service import IngestionService
+from coding_agent_usage_monitors.claude_token_usage.ingestion.repository import IngestionRepository
 
 
 def test_ingestion_service_is_idempotent_and_resumes_from_checkpoint(tmp_path: Path) -> None:

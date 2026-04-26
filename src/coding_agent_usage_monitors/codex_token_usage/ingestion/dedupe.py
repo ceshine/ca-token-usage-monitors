@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from .errors import DeltaConsistencyError, DuplicateConflictError, MonotonicityError
+from .errors import MonotonicityError, DeltaConsistencyError, DuplicateConflictError
 from .schemas import DedupeResult, TokenEventRow, TokenUsageValues
 
 LOGGER = logging.getLogger(__name__)

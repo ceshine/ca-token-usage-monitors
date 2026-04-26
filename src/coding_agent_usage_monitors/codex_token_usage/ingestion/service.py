@@ -3,21 +3,21 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
+from datetime import UTC, datetime
 
 from .dedupe import dedupe_and_validate_token_rows
 from .errors import (
-    DeltaConsistencyError,
-    DuplicateConflictError,
-    ModelAttributionError,
-    MonotonicityError,
     ParseError,
+    MonotonicityError,
     SessionIdentityError,
+    DeltaConsistencyError,
+    ModelAttributionError,
+    DuplicateConflictError,
 )
 from .parser import parse_session_file, parse_session_identity
-from .repository import IngestionRepository
 from .schemas import IngestionCounters, IngestionFileState
+from .repository import IngestionRepository
 
 LOGGER = logging.getLogger(__name__)
 

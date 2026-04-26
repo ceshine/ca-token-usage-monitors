@@ -6,12 +6,12 @@ import shlex
 from uuid import UUID
 from pathlib import Path
 from datetime import UTC, datetime
-from typing import Callable, final
+from typing import final, Callable
 
 from .errors import PathResolutionError, SourceConflictError
 from .parser import parse_usage_jsonl
+from .schemas import JsonlFileState, SourceCheckpoint, IngestionCounters, ResolvedInputPath, IngestionSourceRow
 from .repository import IngestionRepository
-from .schemas import IngestionCounters, IngestionSourceRow, JsonlFileState, ResolvedInputPath, SourceCheckpoint
 from .source_bookkeeping import SourceBookkeepingService
 
 

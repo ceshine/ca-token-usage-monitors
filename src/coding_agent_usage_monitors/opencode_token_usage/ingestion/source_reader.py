@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+from collections.abc import Iterator
 
-from .errors import SourceDatabaseError, SourceSchemaError
+from .errors import SourceSchemaError, SourceDatabaseError
 from .schemas import SourceCheckpoint, SourceMessageRow
 
 REQUIRED_TABLES: tuple[str, ...] = ("message", "session", "project")

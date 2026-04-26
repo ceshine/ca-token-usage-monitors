@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
+from datetime import UTC, datetime
 
 import orjson
 import pytest
@@ -13,8 +13,8 @@ from coding_agent_usage_monitors.claude_token_usage.ingestion.errors import (
     SessionIdentityError,
 )
 from coding_agent_usage_monitors.claude_token_usage.ingestion.parser import (
-    derive_project_name,
     parse_session_file,
+    derive_project_name,
     parse_session_identity,
 )
 from coding_agent_usage_monitors.claude_token_usage.ingestion.schemas import SessionCheckpoint

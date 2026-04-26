@@ -1,5 +1,5 @@
 """Ingestion pipeline for Codex session token usage."""
 
-from .service import IngestionCounters, IngestionService
+from .service import IngestionService, IngestionCounters
 
 __all__ = ["IngestionCounters", "IngestionService"]

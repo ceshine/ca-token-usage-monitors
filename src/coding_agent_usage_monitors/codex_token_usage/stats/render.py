@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from rich.console import Console
 from rich.table import Table
+from rich.console import Console
 
-from .schemas import DailyUsageStatistics, UsageStats
+from .schemas import UsageStats, DailyUsageStatistics
 
 TABLE_ROW_STYLES = ["white", "yellow"]
 

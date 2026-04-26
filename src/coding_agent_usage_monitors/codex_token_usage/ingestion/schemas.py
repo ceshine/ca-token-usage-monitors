@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
-from pathlib import Path
 from uuid import UUID
+from pathlib import Path
+from datetime import datetime
+from dataclasses import field, dataclass
 
 
 TOKEN_FIELDS: tuple[str, ...] = (

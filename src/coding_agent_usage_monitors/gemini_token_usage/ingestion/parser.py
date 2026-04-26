@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
 from uuid import UUID
+from pathlib import Path
+from datetime import UTC, datetime
+from typing import Any
 
 import orjson
 
 from ..preprocessing.metadata import read_project_metadata
 
-from .errors import AppendOnlyViolationError, DuplicateEventError, MetadataValidationError, ParseError
-from .schemas import ParsedJsonlFile, SourceCheckpoint, UsageEventRow
+from .errors import ParseError, DuplicateEventError, MetadataValidationError, AppendOnlyViolationError
+from .schemas import UsageEventRow, ParsedJsonlFile, SourceCheckpoint
 
 
 def parse_usage_jsonl(

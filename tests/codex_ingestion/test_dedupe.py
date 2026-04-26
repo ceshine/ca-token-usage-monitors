@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-from datetime import UTC, datetime
-from pathlib import Path
 from uuid import UUID
+from pathlib import Path
+from datetime import UTC, datetime
+from dataclasses import replace
 
 import pytest
 
 from coding_agent_usage_monitors.codex_token_usage.ingestion.dedupe import dedupe_and_validate_token_rows
 from coding_agent_usage_monitors.codex_token_usage.ingestion.errors import (
+    MonotonicityError,
     DeltaConsistencyError,
     DuplicateConflictError,
-    MonotonicityError,
 )
 from coding_agent_usage_monitors.codex_token_usage.ingestion.schemas import TokenEventRow, TokenUsageValues
 

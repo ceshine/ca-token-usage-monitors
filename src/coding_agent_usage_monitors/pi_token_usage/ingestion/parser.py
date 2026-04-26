@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from datetime import UTC, datetime
-from collections.abc import Iterator
 from typing import Any
+from collections.abc import Iterator
 
 import orjson
 

@@ -10,8 +10,8 @@ import duckdb
 import pytest
 
 from coding_agent_usage_monitors.opencode_token_usage.ingestion.errors import ParseError
-from coding_agent_usage_monitors.opencode_token_usage.ingestion.repository import IngestionRepository
 from coding_agent_usage_monitors.opencode_token_usage.ingestion.service import IngestionService
+from coding_agent_usage_monitors.opencode_token_usage.ingestion.repository import IngestionRepository
 from coding_agent_usage_monitors.opencode_token_usage.ingestion.source_reader import SourceReader
 
 

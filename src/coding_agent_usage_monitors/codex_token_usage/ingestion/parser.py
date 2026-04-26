@@ -3,22 +3,22 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
-from pathlib import Path
-from collections.abc import Iterator
-from typing import Any
 from uuid import UUID
+from pathlib import Path
+from datetime import UTC, datetime
+from typing import Any
+from collections.abc import Iterator
 
 import orjson
 
-from .errors import ModelAttributionError, ParseError, SessionIdentityError
+from .errors import ParseError, SessionIdentityError, ModelAttributionError
 from .schemas import (
+    TokenEventRow,
+    SessionIdentity,
+    TokenUsageValues,
     ParsedSessionFile,
     SessionCheckpoint,
-    SessionIdentity,
     SessionMetadataRow,
-    TokenEventRow,
-    TokenUsageValues,
 )
 
 LOGGER = logging.getLogger(__name__)

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
+from datetime import UTC, datetime
 
 import duckdb
 
+from coding_agent_usage_monitors.opencode_token_usage.ingestion.schemas import SessionRow, MessageUsageRow
 from coding_agent_usage_monitors.opencode_token_usage.ingestion.repository import IngestionRepository
-from coding_agent_usage_monitors.opencode_token_usage.ingestion.schemas import MessageUsageRow, SessionRow
 
 
 def test_repository_upserts_sessions_and_usage_and_updates_checkpoint(tmp_path: Path) -> None:

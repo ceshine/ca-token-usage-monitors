@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
+from datetime import UTC, datetime
 
 import orjson
 import pytest

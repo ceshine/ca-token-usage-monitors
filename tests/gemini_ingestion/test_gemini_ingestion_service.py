@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from uuid import UUID
+from pathlib import Path
 
 import duckdb
 import orjson
 import pytest
 
 from coding_agent_usage_monitors.gemini_token_usage.ingestion.errors import ConfirmationDeclinedError
-from coding_agent_usage_monitors.gemini_token_usage.ingestion.repository import IngestionRepository
 from coding_agent_usage_monitors.gemini_token_usage.ingestion.service import IngestionService
+from coding_agent_usage_monitors.gemini_token_usage.ingestion.repository import IngestionRepository
 
 
 def test_ingestion_service_is_idempotent_and_checkpoint_resumable(tmp_path: Path) -> None:

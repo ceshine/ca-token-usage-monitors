@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import logging
-from contextlib import contextmanager
-from pathlib import Path
-from typing import Iterator
 from uuid import UUID
+from pathlib import Path
+from contextlib import contextmanager
+from typing import Iterator
 
 import duckdb
 
+from .schemas import TokenEventRow, SessionCheckpoint, IngestionFileState, SessionMetadataRow
 from coding_agent_usage_monitors.common.database import parse_db_timestamp
-from .schemas import IngestionFileState, SessionCheckpoint, SessionMetadataRow, TokenEventRow
 
 LOGGER = logging.getLogger(__name__)
 

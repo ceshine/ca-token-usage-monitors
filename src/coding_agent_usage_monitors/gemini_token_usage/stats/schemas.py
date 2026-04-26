@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date, datetime
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

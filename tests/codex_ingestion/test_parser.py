@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from pathlib import Path
 from uuid import UUID
+from pathlib import Path
+from datetime import UTC, datetime
 
 import orjson
 import pytest
 
-from coding_agent_usage_monitors.codex_token_usage.ingestion.errors import ModelAttributionError, ParseError
+from coding_agent_usage_monitors.codex_token_usage.ingestion.errors import ParseError, ModelAttributionError
 from coding_agent_usage_monitors.codex_token_usage.ingestion.parser import parse_session_file, parse_session_identity
 from coding_agent_usage_monitors.codex_token_usage.ingestion.schemas import SessionCheckpoint
 

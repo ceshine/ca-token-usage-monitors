@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Callable
 from uuid import UUID
+from pathlib import Path
+from dataclasses import dataclass
+from typing import Callable
 
-from ..preprocessing.metadata import read_project_metadata
-from .errors import ConfirmationDeclinedError, MetadataValidationError, SourceConflictError
-from .repository import IngestionRepository
+from .errors import SourceConflictError, MetadataValidationError, ConfirmationDeclinedError
 from .schemas import IngestionSourceRow
+from .repository import IngestionRepository
+from ..preprocessing.metadata import read_project_metadata
 
 LOGGER = logging.getLogger(__name__)
 

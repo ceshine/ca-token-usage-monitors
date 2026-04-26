@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
+from datetime import UTC, datetime
 
 from .errors import (
     ParseError,
     SessionIdentityError,
 )
-from .parser import derive_project_name, discover_session_roots, parse_session_file, parse_session_identity
-from .repository import IngestionRepository
+from .parser import parse_session_file, derive_project_name, discover_session_roots, parse_session_identity
 from .schemas import IngestionCounters, IngestionFileState, SessionMetadataRow
+from .repository import IngestionRepository
 
 LOGGER = logging.getLogger(__name__)
 

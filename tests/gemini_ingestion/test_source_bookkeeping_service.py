@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from uuid import UUID
+from pathlib import Path
 
 from coding_agent_usage_monitors.gemini_token_usage.ingestion.repository import IngestionRepository
 from coding_agent_usage_monitors.gemini_token_usage.ingestion.source_bookkeeping import SourceBookkeepingService

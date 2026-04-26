@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
+from contextlib import contextmanager
+from collections.abc import Iterator
 
 import duckdb
 
-from .schemas import MessageUsageRow, SessionRow, SourceCheckpoint
+from .schemas import SessionRow, MessageUsageRow, SourceCheckpoint
 
 
 class IngestionRepository:

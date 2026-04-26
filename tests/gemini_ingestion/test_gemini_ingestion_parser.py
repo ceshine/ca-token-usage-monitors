@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from pathlib import Path
 from uuid import UUID
+from pathlib import Path
+from datetime import UTC, datetime
 
 import orjson
 import pytest
 
 from coding_agent_usage_monitors.gemini_token_usage.ingestion.errors import (
-    AppendOnlyViolationError,
     DuplicateEventError,
     MetadataValidationError,
+    AppendOnlyViolationError,
 )
 from coding_agent_usage_monitors.gemini_token_usage.ingestion.parser import parse_usage_jsonl
 from coding_agent_usage_monitors.gemini_token_usage.ingestion.schemas import SourceCheckpoint

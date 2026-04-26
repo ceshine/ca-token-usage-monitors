@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .errors import ParseError
+from .schemas import SessionRow, MessageUsageRow, IngestionCounters
 from .repository import IngestionRepository
-from .schemas import IngestionCounters, MessageUsageRow, SessionRow
 from .source_reader import SourceReader
 
 

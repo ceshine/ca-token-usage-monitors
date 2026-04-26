@@ -10,12 +10,12 @@ from __future__ import annotations
 import csv
 import json
 import math
-from collections import Counter
-from dataclasses import dataclass, field
-from datetime import date, datetime
 from pathlib import Path
+from datetime import date, datetime
 from statistics import mean, median
-from typing import Annotated, Any
+from collections import Counter
+from dataclasses import field, dataclass
+from typing import Any, Annotated
 
 import typer
 

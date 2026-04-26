@@ -7,7 +7,7 @@ from datetime import date
 from rich.console import Console
 
 from coding_agent_usage_monitors.opencode_token_usage.stats.render import render_daily_usage_statistics
-from coding_agent_usage_monitors.opencode_token_usage.stats.schemas import DailyUsageStatistics, UsageStats
+from coding_agent_usage_monitors.opencode_token_usage.stats.schemas import UsageStats, DailyUsageStatistics
 
 
 def test_render_daily_usage_statistics_includes_provider_and_model_values() -> None:

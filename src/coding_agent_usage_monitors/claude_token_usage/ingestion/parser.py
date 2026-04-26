@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-import logging
 import os
-from datetime import UTC, datetime
+import logging
 from pathlib import Path
-from collections.abc import Iterator
+from datetime import UTC, datetime
 from typing import Any
+from collections.abc import Iterator
 
 import orjson
 
 from .errors import ParseError, SessionIdentityError
 from .schemas import (
+    UsageEventRow,
+    TokenUsageValues,
     ParsedSessionFile,
     SessionCheckpoint,
     SessionMetadataRow,
-    TokenUsageValues,
-    UsageEventRow,
 )
 
 LOGGER = logging.getLogger(__name__)
