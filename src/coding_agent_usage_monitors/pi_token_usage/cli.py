@@ -18,8 +18,8 @@ from .ingestion.parser import discover_session_root
 from .ingestion.schemas import IngestionCounters
 from .ingestion.service import IngestionService
 from .ingestion.repository import IngestionRepository
-from coding_agent_usage_monitors.common.paths import get_default_database_path
-from coding_agent_usage_monitors.common.cli_utils import parse_since_date, parse_until_date
+from ..common.paths import get_default_database_path
+from ..common.cli_utils import parse_since_date, parse_until_date
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_DATABASE_PATH = get_default_database_path()
@@ -106,8 +106,6 @@ def stats_command(
         since=since_date,
         until=until_date,
     )
-
-    _print_opencode_warning(Console())
     render_daily_usage_statistics(report, Console())
 
 
@@ -160,22 +158,12 @@ def _emit_summary(counters: IngestionCounters) -> None:
         typer.echo(f"failed_file={failed_file}")
 
 
-def _print_opencode_warning(console: Console) -> None:
-    """Print a warning about OpenCode output token counts excluding reasoning tokens."""
-    console.print(
-        "⚠ Warning: OpenCode output token counts do not currently include reasoning tokens. "
-        "Actual costs will be higher than shown.",
-        style="yellow",
-    )
-
-
 def _emit_last_7_days_stats(database_path: Path, console: Console) -> None:
     """Render usage statistics from ingested events over the last seven days."""
     today = datetime.now().date()
     since_date = today - timedelta(days=6)
     report = _collect_stats_report(database_path=database_path, timezone=None, since=since_date)
     typer.echo("\nStatistics (last 7 days):")
-    _print_opencode_warning(console)
     render_daily_usage_statistics(report=report, console=console)
 
 

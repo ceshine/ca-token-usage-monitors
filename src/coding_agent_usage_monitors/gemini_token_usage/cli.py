@@ -22,8 +22,8 @@ from .preprocessing.convert import run_log_conversion
 from .preprocessing.metadata import ensure_project_metadata_line
 from .preprocessing.simplify import run_log_simplification
 from .preprocessing.resolve_input import resolve_preprocess_input
-from coding_agent_usage_monitors.common.paths import get_default_database_path
-from coding_agent_usage_monitors.common.cli_utils import parse_since_date, parse_until_date
+from ..common.paths import get_default_database_path
+from ..common.cli_utils import parse_since_date, parse_until_date
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_ARCHIVE_FOLDER = Path("/tmp")

@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
 import json
 from uuid import UUID
+from pathlib import Path
+from datetime import UTC, datetime, timedelta
 
 import orjson
 from typer.testing import CliRunner
 
 from coding_agent_usage_monitors.gemini_token_usage.cli import TYPER_APP
-from coding_agent_usage_monitors.gemini_token_usage.ingestion.repository import IngestionRepository
 from coding_agent_usage_monitors.gemini_token_usage.ingestion.schemas import UsageEventRow
+from coding_agent_usage_monitors.gemini_token_usage.ingestion.repository import IngestionRepository
 
 
 def test_preprocess_converts_log_directory_without_stats(tmp_path: Path) -> None:

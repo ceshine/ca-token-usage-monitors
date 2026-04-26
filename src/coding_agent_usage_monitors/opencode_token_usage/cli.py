@@ -18,11 +18,11 @@ from .ingestion.schemas import IngestionCounters
 from .ingestion.service import IngestionService
 from .ingestion.repository import IngestionRepository
 from .ingestion.source_reader import SourceReader
-from coding_agent_usage_monitors.common.paths import (
+from ..common.paths import (
     get_default_database_path,
     get_default_opencode_db_path,
 )
-from coding_agent_usage_monitors.common.cli_utils import parse_since_date, parse_until_date
+from ..common.cli_utils import parse_since_date, parse_until_date
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_SOURCE_DB = get_default_opencode_db_path()

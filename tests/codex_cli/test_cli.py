@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
 from pathlib import Path
+from datetime import UTC, datetime
 
 import duckdb
 import orjson
