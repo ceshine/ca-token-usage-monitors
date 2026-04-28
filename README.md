@@ -374,12 +374,12 @@ The Gemini CLI generates OpenTelemetry logs as a series of concatenated, indente
 
 ### Pricing Data Collection
 
-To provide accurate cost estimates, the tools fetch the latest model pricing and context window information from the [LiteLLM repository](https://github.com/BerriAI/litellm).
+To provide accurate cost estimates, the tools fetch the latest model pricing and context window information from [models.dev](https://models.dev/).
 
-*   **Source:** `https://raw.githubusercontent.com/BerriAI/litellm/refs/heads/main/model_prices_and_context_window.json`
-*   **Caching:** The pricing data is cached locally (default: `~/.gemini/prices.json`) for 24 hours to reduce network requests and improve performance. An active internet connection is required to update this cache. You can override the cache location by setting the `PRICE_CACHE_PATH` environment variable.
+*   **Source:** `https://models.dev/api.json`
+*   **Caching:** The pricing data is cached locally (default: `~/.local/share/coding-agent-token-monitors/prices.json`) for 24 hours to reduce network requests and improve performance. An active internet connection is required to update this cache. You can override the cache location by setting the `PRICE_CACHE_PATH` environment variable.
 
 ## Acknowledgements
 
 - The [AGENTS.md](./AGENTS.md) was adapted from the examples in this blog post: [Getting Good Results from Claude Code](https://www.dzombak.com/blog/2025/08/getting-good-results-from-claude-code/).
-- This project uses the ["Model Prices and Context Window" JSON file](https://raw.githubusercontent.com/BerriAI/litellm/refs/heads/main/model_prices_and_context_window.json) from LiteLLM to calculate token costs. LiteLLM's efforts in maintaining this file are greatly appreciated.
+- This project uses the [models.dev API](https://models.dev/api.json) to retrieve model pricing and context window data for calculating token costs.
