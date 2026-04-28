@@ -16,7 +16,7 @@ from coding_agent_usage_monitors.opencode_token_usage.stats.service import (
 
 def test_resolve_pricing_model_name_applies_rule_order() -> None:
     """Model price names should follow OpenCode provider/model transformation rules."""
-    assert resolve_pricing_model_name(provider_code="opencode", model_code="gpt-5-free") == "gpt-5"
+    assert resolve_pricing_model_name(provider_code="opencode", model_code="gpt-5-free") == "openai/gpt-5"
     assert resolve_pricing_model_name(provider_code="openrouter", model_code="qwen/qwen3-coder:free") == (
         "openrouter/qwen/qwen3-coder"
     )

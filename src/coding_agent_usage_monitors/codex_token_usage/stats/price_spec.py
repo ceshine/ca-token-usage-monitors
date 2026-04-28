@@ -2,7 +2,6 @@
 
 from coding_agent_usage_monitors.common.model_pricing.price_spec import (
     get_price_spec,
-    PriceSpecConfig,
     DEFAULT_PRICE_SPEC_URL,
     DEFAULT_PRICE_CACHE_PATH,
 )
@@ -12,7 +11,6 @@ URL = DEFAULT_PRICE_SPEC_URL
 __all__ = [
     "DEFAULT_PRICE_CACHE_PATH",
     "DEFAULT_PRICE_SPEC_URL",
-    "PriceSpecConfig",
     "URL",
     "get_price_spec",
 ]

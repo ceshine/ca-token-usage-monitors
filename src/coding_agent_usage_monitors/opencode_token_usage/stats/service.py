@@ -108,8 +108,8 @@ def resolve_pricing_model_name(provider_code: str, model_code: str) -> str:
     normalized_model = _strip_free_suffixes(model_code)
 
     if normalized_model.startswith("gpt"):
-        # Use GPT model names as-is
-        return normalized_model
+        # OpenAI-hosted GPT models.
+        return f"openai/{normalized_model}"
 
     if provider_code == "openrouter":
         return f"openrouter/{normalized_model}"
@@ -130,7 +130,7 @@ def resolve_pricing_model_name(provider_code: str, model_code: str) -> str:
             return "xai/grok-code-fast-1"
         return f"opencode/{normalized_model}"
 
-    return normalized_model
+    return f"{provider_code}/{normalized_model}"
 
 
 def _accumulate_usage_stats(stats: UsageStats, event: TokenUsageEvent, cost: float) -> None:

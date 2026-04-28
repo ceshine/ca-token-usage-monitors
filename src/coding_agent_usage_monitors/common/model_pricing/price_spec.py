@@ -9,16 +9,14 @@ import logging
 from pathlib import Path
 from importlib.resources import files as import_resource_files
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import orjson
 
 from coding_agent_usage_monitors.common.paths import get_default_price_cache_path
 
 LOGGER = logging.getLogger(__name__)
-DEFAULT_PRICE_SPEC_URL = (
-    "https://raw.githubusercontent.com/BerriAI/litellm/refs/heads/main/model_prices_and_context_window.json"
-)
+DEFAULT_PRICE_SPEC_URL = "https://models.dev/api.json"
 _CACHE_PATH_UNSET = object()
 
 
@@ -53,6 +51,76 @@ def _fetch_from_url(url: str) -> dict[str, Any]:
             return orjson.loads(response.read())
     except Exception as exc:  # pragma: no cover - network failures vary by runtime.
         raise RuntimeError(f"Failed to fetch price spec from {url}") from exc
+
+
+def _transform_models_dev_format(raw_data: dict[str, Any]) -> dict[str, Any]:
+    """Transform models.dev provider-nested format to flat ``provider/model`` keyed format.
+
+    The models.dev API nests model pricing under provider keys (e.g. ``openai``, ``anthropic``)
+    and expresses costs in USD per 1M tokens.  This function flattens the structure so that
+    top-level keys are ``provider_id/model_id`` and converts costs to USD per token.
+
+    Callers should look up pricing by prepending the canonical provider prefix
+    (e.g. ``openai/gpt-4o``, ``anthropic/claude-sonnet-4-6``, ``google/gemini-2.5-flash``).
+
+    Data that is already in the flat format (e.g. from a stale cache) is returned unchanged.
+
+    Args:
+        raw_data: Raw JSON from models.dev (provider-keyed) or from a flat-format cache.
+
+    Returns:
+        Flat ``provider/model`` keyed pricing dictionary with per-token costs.
+    """
+    # Detect format: models.dev nests under providers that each contain "id" and "models" keys.
+    has_provider_structure = any(isinstance(v, dict) and "models" in v and "id" in v for v in raw_data.values())
+    if not has_provider_structure:
+        return raw_data  # Already flat; pass through.
+
+    result: dict[str, Any] = {}
+    for provider_id, provider_data in raw_data.items():
+        if not isinstance(provider_data, dict):
+            continue
+        provider_name = provider_data.get("id", provider_id)
+        models = provider_data.get("models", {})
+        if not isinstance(models, dict):
+            continue
+        for model_id, model_data in models.items():
+            if not isinstance(model_data, dict):
+                continue
+
+            # Start with a shallow copy of all model metadata fields.
+            entry: dict[str, Any] = {k: v for k, v in model_data.items() if k not in ("cost", "limit")}
+
+            # Transform cost entries
+            cost = cast(dict[str, Any], model_data.get("cost", {}))
+            # Convert $/MTok → $/token.
+            if "input" in cost:
+                entry["input_cost_per_token"] = cost["input"] / 1_000_000.0
+            if "output" in cost:
+                entry["output_cost_per_token"] = cost["output"] / 1_000_000.0
+            if "cache_read" in cost:
+                entry["cache_read_input_token_cost"] = cost["cache_read"] / 1_000_000.0
+            # Tiered pricing (>200k tokens).
+            context_over = cost.get("context_over_200k", {})
+            if isinstance(context_over, dict):
+                if "input" in context_over:
+                    entry["input_cost_per_token_above_200k_tokens"] = context_over["input"] / 1_000_000.0
+                if "output" in context_over:
+                    entry["output_cost_per_token_above_200k_tokens"] = context_over["output"] / 1_000_000.0
+                if "cache_read" in context_over:
+                    entry["cache_read_input_token_cost_above_200k_tokens"] = context_over["cache_read"] / 1_000_000.0
+
+            # Transform limit entries
+            limit = cast(dict[str, Any], model_data.get("limit", {}))
+            if "context" in limit:
+                entry["max_input_tokens"] = limit["context"]
+            if "output" in limit:
+                entry["max_output_tokens"] = limit["output"]
+
+            # Key format: provider_id/model_id
+            result[f"{provider_name}/{model_id}"] = entry
+
+    return result
 
 
 def _resolve_cache_path(cache_path: Path | str | None | object) -> Path | None:
@@ -128,7 +196,7 @@ def get_price_spec(
     opencode_zen_pricing = _load_opencode_zen_pricing()
 
     if effective_cache_path is None:
-        json_data = _fetch_from_url(url)
+        json_data = _transform_models_dev_format(_fetch_from_url(url))
         return _merge_pricing_data(json_data, opencode_zen_pricing)
 
     if effective_cache_path.exists():
@@ -136,20 +204,20 @@ def get_price_spec(
         if time.time() - mtime < update_interval_seconds:
             try:
                 with effective_cache_path.open("rb") as handle:
-                    json_data = orjson.loads(handle.read())
+                    json_data = _transform_models_dev_format(orjson.loads(handle.read()))
                     return _merge_pricing_data(json_data, opencode_zen_pricing)
             except Exception:
                 LOGGER.error("Failed reading fresh cache at %s; refetching.", effective_cache_path)
 
     # Cache miss or stale - fetch from URL and update cache
     try:
-        json_data = _fetch_from_url(url)
+        json_data = _transform_models_dev_format(_fetch_from_url(url))
     except Exception as exc:
         if effective_cache_path.exists():
             LOGGER.warning("Failed fetching from %s; using stale cache at %s.", url, effective_cache_path)
             try:
                 with effective_cache_path.open("rb") as handle:
-                    json_data = orjson.loads(handle.read())
+                    json_data = _transform_models_dev_format(orjson.loads(handle.read()))
                     return _merge_pricing_data(json_data, opencode_zen_pricing)
             except Exception:
                 LOGGER.error("Failed reading stale cache at %s after fetch error.", effective_cache_path)

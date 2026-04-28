@@ -116,19 +116,15 @@ def _non_reasoning_output_tokens(output_tokens: int, reasoning_output_tokens: in
 
 
 def _resolve_model_price_spec(model_code: str, price_spec: dict[str, Any]) -> dict[str, Any]:
-    """Resolve model pricing with temporary compatibility fallbacks."""
+    """Resolve model pricing with provider-prefixed lookup."""
+    # Codex models are OpenAI-hosted — look up with openai/ prefix first.
+    resolved = price_spec.get(f"openai/{model_code}")
+    if resolved is not None:
+        return resolved
+
+    # Fallback: bare model code (backward compatibility with caches / other sources).
     resolved = price_spec.get(model_code)
     if resolved is not None:
         return resolved
 
-    # The hard-coded fallback for gpt-5.3-codex has been disabled because it is now
-    # available via the API and its pricing is published.
-    #
-    # This logic can be updated and re-enabled for a future model that is available
-    # only through ChatGPT OAuth and not through the API.
-    #
-    # if model_code == "gpt-5.3-codex":
-    #     fallback = price_spec.get("gpt-5.2-codex")
-    #     if fallback is not None:
-    #         return fallback
     return {}

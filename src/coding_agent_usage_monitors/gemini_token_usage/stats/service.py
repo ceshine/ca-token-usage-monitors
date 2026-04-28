@@ -92,7 +92,10 @@ class StatsService:
 
 def calculate_event_cost(event: TokenUsageEvent, price_spec: dict[str, Any]) -> float:
     """Calculate USD cost for one usage event."""
-    model_price_spec = price_spec.get(event.model_code, {})
+    # Gemini models are Google-hosted — look up with google/ prefix first.
+    model_price_spec = price_spec.get(f"google/{event.model_code}")
+    if not isinstance(model_price_spec, dict):
+        model_price_spec = price_spec.get(event.model_code, {})
     non_cached_input_tokens = _non_cached_input_tokens(event.input_tokens, event.cached_input_tokens)
     output_billable_tokens = max(event.output_tokens, 0) + max(event.thoughts_tokens, 0)
 

@@ -145,10 +145,12 @@ def _resolve_event_date(event_timestamp: datetime, timezone: ZoneInfo | None) ->
 def _resolve_model_price_spec(model_code: str, price_spec: dict[str, Any]) -> dict[str, Any]:
     """Resolve model pricing data from model code naming rules."""
     resolved_name = resolve_pricing_model_name(model_code)
+    # Primary: anthropic-prefixed key (matches models.dev format).
+    resolved = price_spec.get(f"anthropic/{resolved_name}")
+    if isinstance(resolved, dict):
+        return resolved
+    # Fallback: bare model code (backward compatibility).
     resolved = price_spec.get(resolved_name)
     if isinstance(resolved, dict):
         return resolved
-    fallback = price_spec.get(f"anthropic/{model_code}")
-    if isinstance(fallback, dict):
-        return fallback
     return {}

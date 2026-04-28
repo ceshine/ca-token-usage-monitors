@@ -44,7 +44,7 @@ def test_stats_command_prints_provider_and_model_breakdown(tmp_path: Path, monke
     monkeypatch.setattr(
         "coding_agent_usage_monitors.opencode_token_usage.stats.service.get_price_spec",
         lambda: {
-            "gpt-5": {
+            "openai/gpt-5": {
                 "input_cost_per_token": 0.001,
                 "output_cost_per_token": 0.002,
                 "cache_read_input_token_cost": 0.0001,
