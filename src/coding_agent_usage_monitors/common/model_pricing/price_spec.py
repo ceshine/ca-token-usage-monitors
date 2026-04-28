@@ -6,7 +6,6 @@ import os
 import time
 import logging
 from pathlib import Path
-from dataclasses import dataclass
 from typing import Any, cast
 
 import orjson
@@ -20,25 +19,6 @@ _CACHE_PATH_UNSET = object()
 
 
 DEFAULT_PRICE_CACHE_PATH = get_default_price_cache_path()
-
-
-@dataclass(frozen=True)
-class PriceSpecConfig:
-    """Configuration for fetching and caching model pricing data.
-
-    Attributes:
-        url: Remote JSON endpoint that returns pricing metadata.
-        update_interval_seconds: Minimum refresh interval for cache updates.
-        cache_path: Cache location.
-            - `None` disables cache reads/writes.
-            - `Path` uses that explicit cache location.
-            - Omitted uses `PRICE_CACHE_PATH` env var when present, otherwise
-              `DEFAULT_PRICE_CACHE_PATH`.
-    """
-
-    url: str = DEFAULT_PRICE_SPEC_URL
-    update_interval_seconds: int = 86400
-    cache_path: Path | None | object = _CACHE_PATH_UNSET
 
 
 def _fetch_from_url(url: str) -> dict[str, Any]:
