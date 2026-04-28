@@ -114,18 +114,12 @@ def resolve_pricing_model_name(provider_code: str, model_code: str) -> str:
     if provider_code == "openrouter":
         return f"openrouter/{normalized_model}"
 
-    if provider_code == "opencode-go":
-        # Use opencode pricing for opencode-go models
-        return f"opencode/{normalized_model}"
-
     if provider_code == "opencode":
         # Supporting legacy models
         if normalized_model.startswith("minimax-m2.1"):
             return f"minimax/{normalized_model.replace('minimax-m', 'MiniMax-M')}"
         if normalized_model.startswith("glm-4.7"):
             return f"openrouter/z-ai/{normalized_model}"
-        if normalized_model.startswith("mimo-v2"):
-            return f"openrouter/xiaomi/{normalized_model}"
         if normalized_model == "grok-code":
             return "xai/grok-code-fast-1"
         return f"opencode/{normalized_model}"

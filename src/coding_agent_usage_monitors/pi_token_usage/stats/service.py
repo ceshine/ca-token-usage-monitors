@@ -113,11 +113,8 @@ def resolve_pricing_model_name(provider_code: str, model_code: str) -> str:
     if provider_code == "openrouter":
         return f"openrouter/{normalized_model}"
 
-    if provider_code == "opencode-go":
-        # Use opencode pricing for opencode-go models
-        return f"opencode/{normalized_model}"
-
     if provider_code == "opencode":
+        # Support legacy models
         if normalized_model == "grok-code":
             return "xai/grok-code-fast-1"
         return f"opencode/{normalized_model}"

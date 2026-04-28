@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import os
 import time
-import urllib.request
 import logging
 from pathlib import Path
-from importlib.resources import files as import_resource_files
 from dataclasses import dataclass
 from typing import Any, cast
 
 import orjson
+import requests
 
 from coding_agent_usage_monitors.common.paths import get_default_price_cache_path
 
@@ -45,10 +44,9 @@ class PriceSpecConfig:
 def _fetch_from_url(url: str) -> dict[str, Any]:
     """Fetch the latest price specification from a URL."""
     try:
-        with urllib.request.urlopen(url) as response:
-            if response.status != 200:
-                raise RuntimeError(f"Failed to fetch price spec: HTTP {response.status}")
-            return orjson.loads(response.read())
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        return orjson.loads(response.content)
     except Exception as exc:  # pragma: no cover - network failures vary by runtime.
         raise RuntimeError(f"Failed to fetch price spec from {url}") from exc
 
@@ -134,42 +132,6 @@ def _resolve_cache_path(cache_path: Path | str | None | object) -> Path | None:
     return Path(cache_path).expanduser()
 
 
-def _load_opencode_zen_pricing() -> dict[str, Any]:
-    """Load the bundled OpenCode Zen pricing data."""
-    try:
-        # Try package resources first (works when installed as package)
-        resource = import_resource_files("coding_agent_usage_monitors.common.model_pricing").joinpath(
-            "opencode_zen_pricing.json"
-        )
-        return orjson.loads(resource.read_text())
-    except Exception:
-        pass
-
-    # Fallback: load from filesystem (works in development)
-    package_dir = Path(__file__).parent
-    json_path = package_dir / "opencode_zen_pricing.json"
-    if json_path.exists():
-        try:
-            with json_path.open("rb") as handle:
-                return orjson.loads(handle.read())
-        except Exception as exc:
-            LOGGER.error("Failed loading OpenCode Zen pricing: %s", exc)
-            raise
-
-    return {}
-
-
-def _merge_pricing_data(litellm_data: dict[str, Any], opencode_data: dict[str, Any]) -> dict[str, Any]:
-    """Merge OpenCode Zen pricing into litellm data with precedence.
-
-    OpenCode Zen data takes precedence for overlapping keys.
-    """
-    # Copy litellm data first, then update with OpenCode data
-    merged = dict(litellm_data)
-    merged.update(opencode_data)
-    return merged
-
-
 def get_price_spec(
     update_interval_seconds: int = 86400,
     *,
@@ -193,19 +155,16 @@ def get_price_spec(
         RuntimeError: If no usable fresh/stale cache exists and remote fetch fails.
     """
     effective_cache_path = _resolve_cache_path(cache_path)
-    opencode_zen_pricing = _load_opencode_zen_pricing()
 
     if effective_cache_path is None:
-        json_data = _transform_models_dev_format(_fetch_from_url(url))
-        return _merge_pricing_data(json_data, opencode_zen_pricing)
+        return _transform_models_dev_format(_fetch_from_url(url))
 
     if effective_cache_path.exists():
         mtime = effective_cache_path.stat().st_mtime
         if time.time() - mtime < update_interval_seconds:
             try:
                 with effective_cache_path.open("rb") as handle:
-                    json_data = _transform_models_dev_format(orjson.loads(handle.read()))
-                    return _merge_pricing_data(json_data, opencode_zen_pricing)
+                    return orjson.loads(handle.read())
             except Exception:
                 LOGGER.error("Failed reading fresh cache at %s; refetching.", effective_cache_path)
 
@@ -217,8 +176,7 @@ def get_price_spec(
             LOGGER.warning("Failed fetching from %s; using stale cache at %s.", url, effective_cache_path)
             try:
                 with effective_cache_path.open("rb") as handle:
-                    json_data = _transform_models_dev_format(orjson.loads(handle.read()))
-                    return _merge_pricing_data(json_data, opencode_zen_pricing)
+                    return orjson.loads(handle.read())
             except Exception:
                 LOGGER.error("Failed reading stale cache at %s after fetch error.", effective_cache_path)
         raise RuntimeError(f"Failed to fetch price spec from {url}") from exc
@@ -230,4 +188,4 @@ def get_price_spec(
     except Exception:
         LOGGER.error("Failed writing price cache at %s.", effective_cache_path)
 
-    return _merge_pricing_data(json_data, opencode_zen_pricing)
+    return json_data
