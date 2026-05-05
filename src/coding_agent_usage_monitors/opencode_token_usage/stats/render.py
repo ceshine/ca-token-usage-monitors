@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from rich.table import Table
@@ -10,6 +11,66 @@ from rich.console import Console
 from .schemas import UsageStats, DailyUsageStatistics
 
 TABLE_ROW_STYLES = ["white", "yellow"]
+
+
+def render_aggregated_daily_stats(
+    usage_by_model_day: dict[tuple[str, str, date], UsageStats],
+    console: Console,
+) -> None:
+    """Aggregate and render daily statistics table with totals."""
+    daily_stats: dict[date, UsageStats] = {}
+    for (provider, model, day), stats in usage_by_model_day.items():
+        if day not in daily_stats:
+            daily_stats[day] = UsageStats()
+        daily_stats[day] += stats
+
+    cost_table = Table(title="Daily Aggregated Statistics", show_footer=True, title_justify="left")
+    cost_table.add_column("Date", justify="left")
+    cost_table.add_column("Cost ($)", footer_style="bold", justify="right")
+    cost_table.add_column("Requests", footer_style="bold", justify="right")
+    cost_table.add_column("Input Tokens", footer_style="bold", justify="right")
+    cost_table.add_column("Output Tokens", footer_style="bold", justify="right")
+    cost_table.add_column("Cached Tokens", footer_style="bold", justify="right")
+    cost_table.add_column("Cache Write Tokens", footer_style="bold", justify="right")
+    cost_table.add_column("Thoughts Tokens", footer_style="bold", justify="right")
+    cost_table.add_column("Total Tokens", footer_style="bold", justify="right")
+
+    total_stats = UsageStats()
+    for index, day in enumerate(sorted(daily_stats)):
+        stats = daily_stats[day]
+        total_stats += stats
+        total_tokens = (
+            stats.input_tokens
+            + stats.output_tokens
+            + stats.cached_tokens
+            + stats.cache_write_tokens
+            + stats.thoughts_tokens
+        )
+        style = TABLE_ROW_STYLES[index % len(TABLE_ROW_STYLES)]
+        cost_table.add_row(
+            day.isoformat(),
+            f"{stats.cost:,.6f}",
+            str(stats.count),
+            f"{stats.input_tokens:,}",
+            f"{stats.output_tokens:,}",
+            f"{stats.cached_tokens:,}",
+            f"{stats.cache_write_tokens:,}",
+            f"{stats.thoughts_tokens:,}",
+            f"{total_tokens:,}",
+            style=style,
+        )
+
+    cost_table.columns[1].footer = f"{total_stats.cost:,.6f}"
+    cost_table.columns[2].footer = str(total_stats.count)
+    cost_table.columns[3].footer = f"{total_stats.input_tokens:,}"
+    cost_table.columns[4].footer = f"{total_stats.output_tokens:,}"
+    cost_table.columns[5].footer = f"{total_stats.cached_tokens:,}"
+    cost_table.columns[6].footer = f"{total_stats.cache_write_tokens:,}"
+    cost_table.columns[7].footer = f"{total_stats.thoughts_tokens:,}"
+    cost_table.columns[
+        8
+    ].footer = f"{(total_stats.input_tokens + total_stats.output_tokens + total_stats.cached_tokens + total_stats.cache_write_tokens + total_stats.thoughts_tokens):,}"
+    console.print(cost_table)
 
 
 def render_daily_usage_statistics(report: DailyUsageStatistics, console: Console) -> None:
@@ -23,22 +84,10 @@ def render_daily_usage_statistics(report: DailyUsageStatistics, console: Console
         ((day.isoformat(), provider, model), report.usage_by_model_day[(provider, model, day)])
         for provider, model, day in sorted_keys
     ]
-    _print_usage_table("Daily Token Usage", daily_data, console, show_date=True)
+    _print_usage_table("Daily Token Usage by Model", daily_data, console, show_date=True)
     console.print("\n")
 
-    cost_table = Table(title="Daily Aggregated Costs", show_footer=True, title_justify="left")
-    cost_table.add_column("Date", justify="left")
-    cost_table.add_column("Cost ($)", justify="right", footer_style="bold")
-
-    total_daily_cost = 0.0
-    for index, day in enumerate(sorted(report.daily_costs)):
-        day_cost = report.daily_costs[day]
-        total_daily_cost += day_cost
-        style = TABLE_ROW_STYLES[index % len(TABLE_ROW_STYLES)]
-        cost_table.add_row(day.isoformat(), f"{day_cost:,.6f}", style=style)
-
-    cost_table.columns[1].footer = f"{total_daily_cost:,.6f}"
-    console.print(cost_table)
+    render_aggregated_daily_stats(report.usage_by_model_day, console)
     console.print("\n")
 
     overall_data = sorted(report.overall_usage.items(), key=lambda item: item[0])
@@ -51,7 +100,7 @@ def _print_usage_table(
     console: Console,
     show_date: bool = False,
 ) -> None:
-    """Render one usage table with totals."""
+    """Render model token usage table with totals."""
     table = Table(
         title=title,
         show_footer=True,
