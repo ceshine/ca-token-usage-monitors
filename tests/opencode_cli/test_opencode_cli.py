@@ -68,7 +68,7 @@ def test_stats_command_prints_provider_and_model_breakdown(tmp_path: Path, monke
             "--timezone",
             "UTC",
         ],
-        terminal_width=220,
+        env={"COLUMNS": "220"},
     )
 
     assert result.exit_code == 0
@@ -121,7 +121,7 @@ def test_stats_command_since_filters_older_days(tmp_path: Path, monkeypatch) -> 
             "--since",
             "2026-02-22",
         ],
-        terminal_width=220,
+        env={"COLUMNS": "220"},
     )
 
     assert result.exit_code == 0

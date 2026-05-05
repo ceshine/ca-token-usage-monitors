@@ -119,6 +119,7 @@ def test_ingest_command_preprocesses_all_active_paths_before_ingestion(tmp_path:
     result = runner.invoke(
         TYPER_APP,
         ["ingest", "--all-active", "--database-path", str(database_path)],
+        env={"COLUMNS": "200"},
     )
 
     assert result.exit_code == 0
