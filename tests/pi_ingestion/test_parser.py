@@ -104,6 +104,7 @@ def test_parse_session_file_extracts_usage_rows(tmp_path: Path) -> None:
     assert parsed.usage_rows_raw == 2
     first, second = parsed.usage_rows
     assert first.message_id == "m-1"
+    assert first.source_type == "message"
     assert first.input_tokens == 3057
     assert first.output_tokens == 73
     assert first.total_tokens == 3130
@@ -146,6 +147,187 @@ def test_parse_session_file_fails_on_duplicate_id(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ParseError, match="Duplicate entry id"):
+        parse_session_file(session_file)
+
+
+def test_parse_session_file_fails_on_duplicate_id_across_source_types(tmp_path: Path) -> None:
+    """Duplicate id across message and branch_summary should be rejected."""
+    session_file = _build_session_file(
+        tmp_path,
+        cwd="/home/alice/work",
+        events=[
+            _session_entry(cwd="/home/alice/work"),
+            _assistant_event("2026-04-13T15:43:00Z", msg_id="dup"),
+            _branch_summary_event(
+                "2026-04-13T15:44:00Z",
+                summary_id="dup",
+                input_t=500,
+                output_t=200,
+            ),
+        ],
+    )
+
+    with pytest.raises(ParseError, match="Duplicate entry id"):
+        parse_session_file(session_file)
+
+
+# --- branch_summary tests ---
+
+
+def test_parse_branch_summary_extracts_usage_from_details(tmp_path: Path) -> None:
+    session_file = _build_session_file(
+        tmp_path,
+        cwd="/home/alice/work",
+        events=[
+            _session_entry(cwd="/home/alice/work"),
+            _branch_summary_event(
+                "2026-04-13T15:44:00Z",
+                summary_id="bs-1",
+                input_t=2978,
+                output_t=567,
+                cache_read=23296,
+                cache_write=0,
+                total=26841,
+                provider="opencode-go",
+                model="deepseek-v4-pro",
+                api="openai-completions",
+                parent_id="parent-1",
+            ),
+        ],
+    )
+
+    parsed = parse_session_file(session_file)
+
+    assert len(parsed.usage_rows) == 1
+    assert parsed.usage_rows_raw == 1
+    row = parsed.usage_rows[0]
+    assert row.message_id == "bs-1"
+    assert row.source_type == "branch_summary"
+    assert row.input_tokens == 2978
+    assert row.output_tokens == 567
+    assert row.cache_read_tokens == 23296
+    assert row.cache_write_tokens == 0
+    assert row.total_tokens == 26841
+    assert row.provider_code == "opencode-go"
+    assert row.model_code == "deepseek-v4-pro"
+    assert row.stop_reason is None
+    assert row.parent_id == "parent-1"
+
+
+def test_parse_branch_summary_skips_when_no_usage_in_details(tmp_path: Path) -> None:
+    """Branch summary without usage (no extension installed) is skipped."""
+    session_file = _build_session_file(
+        tmp_path,
+        cwd="/home/alice/work",
+        events=[
+            _session_entry(cwd="/home/alice/work"),
+            _branch_summary_event(
+                "2026-04-13T15:44:00Z",
+                summary_id="bs-no-usage",
+                include_usage=False,
+            ),
+        ],
+    )
+
+    parsed = parse_session_file(session_file)
+
+    assert len(parsed.usage_rows) == 0
+
+
+def test_parse_branch_summary_skips_when_details_missing(tmp_path: Path) -> None:
+    session_file = _build_session_file(
+        tmp_path,
+        cwd="/home/alice/work",
+        events=[
+            _session_entry(cwd="/home/alice/work"),
+            {
+                "type": "branch_summary",
+                "id": "bs-no-details",
+                "parentId": "p-1",
+                "timestamp": "2026-04-13T15:44:00Z",
+                "fromId": "f-1",
+                "summary": "No details here",
+                "fromHook": False,
+            },
+        ],
+    )
+
+    parsed = parse_session_file(session_file)
+
+    assert len(parsed.usage_rows) == 0
+
+
+def test_parse_branch_summary_extracts_cost_from_details(tmp_path: Path) -> None:
+    session_file = _build_session_file(
+        tmp_path,
+        cwd="/home/alice/work",
+        events=[
+            _session_entry(cwd="/home/alice/work"),
+            _branch_summary_event(
+                "2026-04-13T15:44:00Z",
+                summary_id="bs-cost",
+                input_t=1000,
+                output_t=500,
+                cost_input=0.001,
+                cost_output=0.002,
+                cost_cache_read=0.0003,
+                cost_cache_write=0.0004,
+                cost_total=0.0037,
+            ),
+        ],
+    )
+
+    parsed = parse_session_file(session_file)
+
+    assert len(parsed.usage_rows) == 1
+    cost = parsed.usage_rows[0].reported_cost
+    assert cost.input_usd == 0.001
+    assert cost.output_usd == 0.002
+    assert cost.cache_read_usd == 0.0003
+    assert cost.cache_write_usd == 0.0004
+    assert cost.total_usd == 0.0037
+
+
+def test_parse_branch_summary_fails_on_missing_input(tmp_path: Path) -> None:
+    """A branch_summary with a non-int 'input' in details.usage should fail."""
+    session_file = _build_session_file(
+        tmp_path,
+        cwd="/home/alice/work",
+        events=[
+            _session_entry(cwd="/home/alice/work"),
+            _branch_summary_event(
+                "2026-04-13T15:44:00Z",
+                summary_id="bs-bad",
+                input_t=100,
+                output_t=500,
+            ),
+        ],
+    )
+    # Mutate: replace the int 'input' with a string to trigger ParseError
+    raw_events = _read_jsonl(session_file)
+    raw_events[1]["details"]["usage"]["input"] = "oops"
+    _write_jsonl(session_file, raw_events)
+
+    with pytest.raises(ParseError, match=r"details\.usage\.input"):
+        parse_session_file(session_file)
+
+
+def test_parse_branch_summary_fails_on_missing_id(tmp_path: Path) -> None:
+    session_file = _build_session_file(
+        tmp_path,
+        cwd="/home/alice/work",
+        events=[
+            _session_entry(cwd="/home/alice/work"),
+            _branch_summary_event(
+                "2026-04-13T15:44:00Z",
+                summary_id="",
+                input_t=100,
+                output_t=20,
+            ),
+        ],
+    )
+
+    with pytest.raises(ParseError, match="Missing required 'id'"):
         parse_session_file(session_file)
 
 
@@ -225,14 +407,18 @@ def _build_session_file(
     *,
     cwd: str | None,
     assistant_events: list[dict[str, Any]] | None = None,
+    events: list[dict[str, Any]] | None = None,
 ) -> Path:
     session_file = tmp_path / f"2026-04-13T15-42-45-133Z_{SESSION_ID}.jsonl"
-    events: list[dict[str, Any]] = [_session_entry(cwd=cwd)]
-    if assistant_events:
-        events.extend(assistant_events)
+    if events is not None:
+        entries: list[dict[str, Any]] = list(events)
     else:
-        events.append(_assistant_event("2026-04-13T15:43:00Z", msg_id="default"))
-    _write_jsonl(session_file, events)
+        entries = [_session_entry(cwd=cwd)]
+        if assistant_events:
+            entries.extend(assistant_events)
+        else:
+            entries.append(_assistant_event("2026-04-13T15:43:00Z", msg_id="default"))
+    _write_jsonl(session_file, entries)
     return session_file
 
 
@@ -290,8 +476,87 @@ def _assistant_event(
     return event
 
 
+def _branch_summary_event(
+    timestamp: str,
+    *,
+    summary_id: str,
+    input_t: int | None = 100,
+    output_t: int | None = 50,
+    cache_read: int = 0,
+    cache_write: int = 0,
+    total: int | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    api: str | None = None,
+    parent_id: str | None = None,
+    include_usage: bool = True,
+    cost_input: float | None = None,
+    cost_output: float | None = None,
+    cost_cache_read: float | None = None,
+    cost_cache_write: float | None = None,
+    cost_total: float | None = None,
+) -> dict[str, Any]:
+    """Build a ``type: branch_summary`` event matching the shape produced
+    by the ``branch-summary-usage`` Pi extension."""
+    details: dict[str, Any] = {
+        "readFiles": [],
+        "modifiedFiles": [],
+    }
+    if include_usage and input_t is not None and output_t is not None:
+        usage: dict[str, Any] = {
+            "input": input_t,
+            "output": output_t,
+            "cacheRead": cache_read,
+            "cacheWrite": cache_write,
+        }
+        if total is not None:
+            usage["totalTokens"] = total
+        cost: dict[str, float] = {}
+        if cost_input is not None:
+            cost["input"] = cost_input
+        if cost_output is not None:
+            cost["output"] = cost_output
+        if cost_cache_read is not None:
+            cost["cacheRead"] = cost_cache_read
+        if cost_cache_write is not None:
+            cost["cacheWrite"] = cost_cache_write
+        if cost_total is not None:
+            cost["total"] = cost_total
+        if cost:
+            usage["cost"] = cost
+        details["usage"] = usage
+    if provider is not None:
+        details["provider"] = provider
+    if model is not None:
+        details["model"] = model
+    if api is not None:
+        details["api"] = api
+
+    return {
+        "type": "branch_summary",
+        "id": summary_id,
+        "parentId": parent_id,
+        "timestamp": timestamp,
+        "fromId": "some-from-id",
+        "summary": "The user explored a different conversation branch\u2026",
+        "details": details,
+        "fromHook": True,
+    }
+
+
 def _write_jsonl(path: Path, events: list[dict[str, Any]]) -> None:
     with path.open("wb") as handle:
         for event in events:
             handle.write(orjson.dumps(event))
             handle.write(b"\n")
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """Read all JSONL events from a file (for test mutation)."""
+    events: list[dict[str, Any]] = []
+    with path.open("rb") as handle:
+        for raw_line in handle:
+            if not raw_line.strip():
+                continue
+            events.append(orjson.loads(raw_line))
+    return events

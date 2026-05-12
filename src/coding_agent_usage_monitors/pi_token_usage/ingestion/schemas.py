@@ -30,10 +30,15 @@ class SessionMetadataRow:
 
 @dataclass(frozen=True)
 class UsageEventRow:
-    """One row persisted in pi_usage_events."""
+    """One row persisted in pi_usage_events.
+
+    ``source_type`` distinguishes between ``"message"`` (regular assistant
+    turn) and ``"branch_summary"`` (tree-navigation summarisation).
+    """
 
     session_id: str
     message_id: str
+    source_type: str
     parent_id: str | None
     event_timestamp: datetime
     event_line_number: int

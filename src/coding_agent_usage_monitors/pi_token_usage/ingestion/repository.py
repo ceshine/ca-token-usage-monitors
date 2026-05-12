@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS pi_session_metadata (
 CREATE TABLE IF NOT EXISTS pi_usage_events (
     session_id VARCHAR NOT NULL,
     message_id VARCHAR NOT NULL,
+    source_type VARCHAR NOT NULL DEFAULT 'message',
     parent_id VARCHAR,
     event_timestamp TIMESTAMPTZ NOT NULL,
     event_line_number BIGINT NOT NULL,
@@ -65,6 +66,18 @@ CREATE TABLE IF NOT EXISTS pi_usage_events (
     ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (session_id, message_id)
 )
+            """
+        )
+        # Backfill source_type for pre-migration databases (before the column
+        # was added to the CREATE TABLE definition).
+        _ = self._connection.execute(
+            """
+ALTER TABLE pi_usage_events ADD COLUMN IF NOT EXISTS source_type VARCHAR
+            """
+        )
+        _ = self._connection.execute(
+            """
+UPDATE pi_usage_events SET source_type = 'message' WHERE source_type IS NULL
             """
         )
         _ = self._connection.execute(
@@ -175,6 +188,7 @@ DO UPDATE SET
 INSERT INTO pi_usage_events (
     session_id,
     message_id,
+    source_type,
     parent_id,
     event_timestamp,
     event_line_number,
@@ -192,13 +206,14 @@ INSERT INTO pi_usage_events (
     pi_reported_cost_cache_write_usd,
     pi_reported_cost_total_usd
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (session_id, message_id) DO NOTHING
             """,
             [
                 [
                     row.session_id,
                     row.message_id,
+                    row.source_type,
                     row.parent_id,
                     row.event_timestamp,
                     row.event_line_number,

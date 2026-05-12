@@ -18,6 +18,7 @@ def _make_usage_row(session_id: str, message_id: str, ts: datetime) -> UsageEven
     return UsageEventRow(
         session_id=session_id,
         message_id=message_id,
+        source_type="message",
         parent_id=None,
         event_timestamp=ts,
         event_line_number=2,

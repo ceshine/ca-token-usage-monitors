@@ -152,80 +152,30 @@ def parse_session_file(
         if line_number == 1:
             # Already consumed as the session entry.
             continue
-        if event.get("type") != "message":
+
+        event_type = event.get("type")
+
+        if event_type == "message":
+            row = _parse_message_event(event, session_file_path, line_number, session_id)
+        elif event_type == "branch_summary":
+            row = _parse_branch_summary_event(event, session_file_path, line_number, session_id)
+        else:
             continue
 
-        message = event.get("message")
-        if not isinstance(message, dict):
-            continue
-        if message.get("role") != "assistant":
+        if row is None:
             continue
 
-        usage_raw = message.get("usage")
-        if not isinstance(usage_raw, dict):
-            continue
-        if "input" not in usage_raw or "output" not in usage_raw:
-            continue
-
-        message_id = event.get("id")
-        if not isinstance(message_id, str) or not message_id:
-            raise ParseError(f"Missing required 'id' on assistant entry in {session_file_path} at line {line_number}.")
-
-        if message_id in seen_ids:
-            raise ParseError(f"Duplicate entry id {message_id!r} in {session_file_path} at line {line_number}.")
-        seen_ids.add(message_id)
-
-        event_timestamp = _parse_required_timestamp(event.get("timestamp"), session_file_path, line_number, "timestamp")
-
-        input_tokens = _require_int(usage_raw, "input", session_file_path, line_number, parent="message.usage")
-        output_tokens = _require_int(usage_raw, "output", session_file_path, line_number, parent="message.usage")
-        cache_read_tokens = _optional_int(
-            usage_raw, "cacheRead", session_file_path, line_number, parent="message.usage", default=0
-        )
-        cache_write_tokens = _optional_int(
-            usage_raw, "cacheWrite", session_file_path, line_number, parent="message.usage", default=0
-        )
-        total_tokens = _optional_int(
-            usage_raw, "totalTokens", session_file_path, line_number, parent="message.usage", default=None
-        )
+        if row.message_id in seen_ids:
+            raise ParseError(f"Duplicate entry id {row.message_id!r} in {session_file_path} at line {line_number}.")
+        seen_ids.add(row.message_id)
 
         usage_rows_raw += 1
 
-        if checkpoint is not None and not _passes_checkpoint(event_timestamp, message_id, checkpoint):
+        if checkpoint is not None and not _passes_checkpoint(row.event_timestamp, row.message_id, checkpoint):
             usage_rows_skipped_before_checkpoint += 1
             continue
 
-        reported_cost = _extract_cost(usage_raw.get("cost"), session_file_path, line_number)
-
-        parent_id = event.get("parentId")
-        if parent_id is not None and not isinstance(parent_id, str):
-            raise ParseError(
-                f"Invalid 'parentId' on assistant entry in {session_file_path} at line {line_number}: "
-                f"expected string or null, got {type(parent_id).__name__}."
-            )
-
-        provider_code = _optional_str(message, "provider", session_file_path, line_number)
-        model_code = _optional_str(message, "model", session_file_path, line_number)
-        stop_reason = _optional_str(message, "stopReason", session_file_path, line_number)
-
-        usage_rows.append(
-            UsageEventRow(
-                session_id=session_id,
-                message_id=message_id,
-                parent_id=parent_id,
-                event_timestamp=event_timestamp,
-                event_line_number=line_number,
-                provider_code=provider_code,
-                model_code=model_code,
-                stop_reason=stop_reason,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                cache_read_tokens=cache_read_tokens,
-                cache_write_tokens=cache_write_tokens,
-                total_tokens=total_tokens,
-                reported_cost=reported_cost,
-            )
-        )
+        usage_rows.append(row)
 
     return ParsedSessionFile(
         metadata=metadata,
@@ -233,6 +183,156 @@ def parse_session_file(
         usage_rows_raw=usage_rows_raw,
         usage_rows_skipped_before_checkpoint=usage_rows_skipped_before_checkpoint,
         cwd_recovered_from_path=cwd_recovered_from_path,
+    )
+
+
+def _parse_message_event(
+    event: dict[str, Any],
+    session_file_path: Path,
+    line_number: int,
+    session_id: str,
+) -> UsageEventRow | None:
+    """Extract a ``UsageEventRow`` from a ``type: message`` (assistant) event.
+
+    Returns ``None`` when the event is not an assistant message or lacks
+    required usage fields.
+    """
+    message = event.get("message")
+    if not isinstance(message, dict):
+        return None
+    if message.get("role") != "assistant":
+        return None
+
+    usage_raw = message.get("usage")
+    if not isinstance(usage_raw, dict):
+        return None
+    if "input" not in usage_raw or "output" not in usage_raw:
+        return None
+
+    message_id = event.get("id")
+    if not isinstance(message_id, str) or not message_id:
+        raise ParseError(f"Missing required 'id' on assistant entry in {session_file_path} at line {line_number}.")
+
+    event_timestamp = _parse_required_timestamp(event.get("timestamp"), session_file_path, line_number, "timestamp")
+
+    input_tokens = _require_int(usage_raw, "input", session_file_path, line_number, parent="message.usage")
+    output_tokens = _require_int(usage_raw, "output", session_file_path, line_number, parent="message.usage")
+    cache_read_tokens = _optional_int(
+        usage_raw, "cacheRead", session_file_path, line_number, parent="message.usage", default=0
+    )
+    cache_write_tokens = _optional_int(
+        usage_raw, "cacheWrite", session_file_path, line_number, parent="message.usage", default=0
+    )
+    total_tokens = _optional_int(
+        usage_raw, "totalTokens", session_file_path, line_number, parent="message.usage", default=None
+    )
+
+    reported_cost = _extract_cost(usage_raw.get("cost"), session_file_path, line_number)
+
+    parent_id = event.get("parentId")
+    if parent_id is not None and not isinstance(parent_id, str):
+        raise ParseError(
+            f"Invalid 'parentId' on assistant entry in {session_file_path} at line {line_number}: "
+            f"expected string or null, got {type(parent_id).__name__}."
+        )
+
+    provider_code = _optional_str(message, "provider", session_file_path, line_number)
+    model_code = _optional_str(message, "model", session_file_path, line_number)
+    stop_reason = _optional_str(message, "stopReason", session_file_path, line_number)
+
+    return UsageEventRow(
+        session_id=session_id,
+        message_id=message_id,
+        source_type="message",
+        parent_id=parent_id,
+        event_timestamp=event_timestamp,
+        event_line_number=line_number,
+        provider_code=provider_code,
+        model_code=model_code,
+        stop_reason=stop_reason,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_read_tokens=cache_read_tokens,
+        cache_write_tokens=cache_write_tokens,
+        total_tokens=total_tokens,
+        reported_cost=reported_cost,
+    )
+
+
+def _parse_branch_summary_event(
+    event: dict[str, Any],
+    session_file_path: Path,
+    line_number: int,
+    session_id: str,
+) -> UsageEventRow | None:
+    """Extract a ``UsageEventRow`` from a ``type: branch_summary`` event.
+
+    Returns ``None`` when the event lacks usage data in ``details.usage``
+    (e.g. the branch-summary-usage extension is not installed).
+
+    Token usage, provider, and model are read from ``details`` because
+    Pi's default summariser does not persist them at all. The
+    ``branch-summary-usage`` extension enriches ``details`` with those
+    fields.
+    """
+    details = event.get("details")
+    if not isinstance(details, dict):
+        return None
+
+    usage_raw = details.get("usage")
+    if not isinstance(usage_raw, dict):
+        return None
+    if "input" not in usage_raw or "output" not in usage_raw:
+        return None
+
+    summary_id = event.get("id")
+    if not isinstance(summary_id, str) or not summary_id:
+        raise ParseError(f"Missing required 'id' on branch_summary entry in {session_file_path} at line {line_number}.")
+
+    event_timestamp = _parse_required_timestamp(event.get("timestamp"), session_file_path, line_number, "timestamp")
+
+    input_tokens = _require_int(usage_raw, "input", session_file_path, line_number, parent="details.usage")
+    output_tokens = _require_int(usage_raw, "output", session_file_path, line_number, parent="details.usage")
+    cache_read_tokens = _optional_int(
+        usage_raw, "cacheRead", session_file_path, line_number, parent="details.usage", default=0
+    )
+    cache_write_tokens = _optional_int(
+        usage_raw, "cacheWrite", session_file_path, line_number, parent="details.usage", default=0
+    )
+    total_tokens = _optional_int(
+        usage_raw, "totalTokens", session_file_path, line_number, parent="details.usage", default=None
+    )
+
+    reported_cost = _extract_cost(usage_raw.get("cost"), session_file_path, line_number)
+
+    parent_id = event.get("parentId")
+    if parent_id is not None and not isinstance(parent_id, str):
+        raise ParseError(
+            f"Invalid 'parentId' on branch_summary entry in {session_file_path} at line {line_number}: "
+            f"expected string or null, got {type(parent_id).__name__}."
+        )
+
+    # Branch summary events carry provider/model/api in `details`, not at
+    # the message level (there is no `message` key).
+    provider_code = _optional_str(details, "provider", session_file_path, line_number)
+    model_code = _optional_str(details, "model", session_file_path, line_number)
+
+    return UsageEventRow(
+        session_id=session_id,
+        message_id=summary_id,
+        source_type="branch_summary",
+        parent_id=parent_id,
+        event_timestamp=event_timestamp,
+        event_line_number=line_number,
+        provider_code=provider_code,
+        model_code=model_code,
+        stop_reason=None,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_read_tokens=cache_read_tokens,
+        cache_write_tokens=cache_write_tokens,
+        total_tokens=total_tokens,
+        reported_cost=reported_cost,
     )
 
 
