@@ -33,7 +33,8 @@ class UsageEventRow:
     """One row persisted in pi_usage_events.
 
     ``source_type`` distinguishes between ``"message"`` (regular assistant
-    turn) and ``"branch_summary"`` (tree-navigation summarisation).
+    turn), ``"branch_summary"`` (tree-navigation summarisation), and
+    ``"compaction"`` (context compaction hook).
     """
 
     session_id: str

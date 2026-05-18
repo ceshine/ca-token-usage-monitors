@@ -157,8 +157,8 @@ def parse_session_file(
 
         if event_type == "message":
             row = _parse_message_event(event, session_file_path, line_number, session_id)
-        elif event_type == "branch_summary":
-            row = _parse_branch_summary_event(event, session_file_path, line_number, session_id)
+        elif event_type in ("branch_summary", "compaction"):
+            row = _parse_summarization_event(event, session_file_path, line_number, session_id, source_type=event_type)
         else:
             continue
 
@@ -259,21 +259,21 @@ def _parse_message_event(
     )
 
 
-def _parse_branch_summary_event(
+def _parse_summarization_event(
     event: dict[str, Any],
     session_file_path: Path,
     line_number: int,
     session_id: str,
+    source_type: str,
 ) -> UsageEventRow | None:
-    """Extract a ``UsageEventRow`` from a ``type: branch_summary`` event.
+    """Extract a ``UsageEventRow`` from a summarization event.
+
+    Handles both ``branch_summary`` and ``compaction`` event types — each
+    represents the agent condensing context and carries provider / model /
+    usage data inside ``details`` rather than under a ``message`` key.
 
     Returns ``None`` when the event lacks usage data in ``details.usage``
-    (e.g. the branch-summary-usage extension is not installed).
-
-    Token usage, provider, and model are read from ``details`` because
-    Pi's default summariser does not persist them at all. The
-    ``branch-summary-usage`` extension enriches ``details`` with those
-    fields.
+    (e.g. the relevant Pi extension is not installed).
     """
     details = event.get("details")
     if not isinstance(details, dict):
@@ -285,9 +285,9 @@ def _parse_branch_summary_event(
     if "input" not in usage_raw or "output" not in usage_raw:
         return None
 
-    summary_id = event.get("id")
-    if not isinstance(summary_id, str) or not summary_id:
-        raise ParseError(f"Missing required 'id' on branch_summary entry in {session_file_path} at line {line_number}.")
+    event_id = event.get("id")
+    if not isinstance(event_id, str) or not event_id:
+        raise ParseError(f"Missing required 'id' on {source_type} entry in {session_file_path} at line {line_number}.")
 
     event_timestamp = _parse_required_timestamp(event.get("timestamp"), session_file_path, line_number, "timestamp")
 
@@ -308,19 +308,17 @@ def _parse_branch_summary_event(
     parent_id = event.get("parentId")
     if parent_id is not None and not isinstance(parent_id, str):
         raise ParseError(
-            f"Invalid 'parentId' on branch_summary entry in {session_file_path} at line {line_number}: "
+            f"Invalid 'parentId' on {source_type} entry in {session_file_path} at line {line_number}: "
             f"expected string or null, got {type(parent_id).__name__}."
         )
 
-    # Branch summary events carry provider/model/api in `details`, not at
-    # the message level (there is no `message` key).
     provider_code = _optional_str(details, "provider", session_file_path, line_number)
     model_code = _optional_str(details, "model", session_file_path, line_number)
 
     return UsageEventRow(
         session_id=session_id,
-        message_id=summary_id,
-        source_type="branch_summary",
+        message_id=event_id,
+        source_type=source_type,
         parent_id=parent_id,
         event_timestamp=event_timestamp,
         event_line_number=line_number,
