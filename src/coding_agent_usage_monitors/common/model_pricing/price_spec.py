@@ -16,6 +16,7 @@ from coding_agent_usage_monitors.common.paths import get_default_price_cache_pat
 LOGGER = logging.getLogger(__name__)
 DEFAULT_PRICE_SPEC_URL = "https://models.dev/api.json"
 _CACHE_PATH_UNSET = object()
+_CROF_JSON_PATH = Path(__file__).parent / "crof-ai.json"
 
 
 DEFAULT_PRICE_CACHE_PATH = get_default_price_cache_path()
@@ -112,6 +113,37 @@ def _resolve_cache_path(cache_path: Path | str | None | object) -> Path | None:
     return Path(cache_path).expanduser()
 
 
+def _load_bundled_crof_pricing() -> dict[str, Any]:
+    """Load bundled crof.ai model pricing from ``crof-ai.json``.
+
+    Returns:
+        Flat ``crof/model_id`` keyed pricing dictionary with per-token costs.
+        Returns an empty dict if the file is missing or unreadable.
+    """
+    if not _CROF_JSON_PATH.exists():
+        LOGGER.warning("Bundled crof-ai.json not found at %s.", _CROF_JSON_PATH)
+        return {}
+    try:
+        with _CROF_JSON_PATH.open("rb") as handle:
+            return orjson.loads(handle.read())
+    except Exception:
+        LOGGER.exception("Failed to load bundled crof-ai.json.")
+        return {}
+
+
+def _merge_crof_pricing(data: dict[str, Any]) -> dict[str, Any]:
+    """Merge bundled crof.ai pricing into *data*, returning the combined dict.
+
+    *data* is not mutated; the returned dict is a new mapping.  crof.ai entries
+    appear first so that models.dev (or cached) entries take precedence for any
+    keys that happen to collide.
+    """
+    crof_data = _load_bundled_crof_pricing()
+    if not crof_data:
+        return data
+    return crof_data | data
+
+
 def get_price_spec(
     update_interval_seconds: int = 86400,
     *,
@@ -137,14 +169,14 @@ def get_price_spec(
     effective_cache_path = _resolve_cache_path(cache_path)
 
     if effective_cache_path is None:
-        return _transform_models_dev_format(_fetch_from_url(url))
+        return _merge_crof_pricing(_transform_models_dev_format(_fetch_from_url(url)))
 
     if effective_cache_path.exists():
         mtime = effective_cache_path.stat().st_mtime
         if time.time() - mtime < update_interval_seconds:
             try:
                 with effective_cache_path.open("rb") as handle:
-                    return orjson.loads(handle.read())
+                    return _merge_crof_pricing(orjson.loads(handle.read()))
             except Exception:
                 LOGGER.error("Failed reading fresh cache at %s; refetching.", effective_cache_path)
 
@@ -156,7 +188,7 @@ def get_price_spec(
             LOGGER.warning("Failed fetching from %s; using stale cache at %s.", url, effective_cache_path)
             try:
                 with effective_cache_path.open("rb") as handle:
-                    return orjson.loads(handle.read())
+                    return _merge_crof_pricing(orjson.loads(handle.read()))
             except Exception:
                 LOGGER.error("Failed reading stale cache at %s after fetch error.", effective_cache_path)
         raise RuntimeError(f"Failed to fetch price spec from {url}") from exc
@@ -168,4 +200,4 @@ def get_price_spec(
     except Exception:
         LOGGER.error("Failed writing price cache at %s.", effective_cache_path)
 
-    return json_data
+    return _merge_crof_pricing(json_data)
