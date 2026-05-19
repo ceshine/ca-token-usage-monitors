@@ -90,6 +90,11 @@ def stats_command(
         "--until",
         help="Include only usage before this date, exclusive (YYYY-MM-DD).",
     ),
+    provider: bool = typer.Option(
+        False,
+        "--provider",
+        help="Show a daily token usage breakdown aggregated by provider.",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable info-level logging."),
 ) -> None:
     """Aggregate and print daily token usage and costs from DuckDB."""
@@ -106,7 +111,7 @@ def stats_command(
         since=since_date,
         until=until_date,
     )
-    render_daily_usage_statistics(report, Console())
+    render_daily_usage_statistics(report, Console(), show_provider_table=provider)
 
 
 def _run_ingestion(

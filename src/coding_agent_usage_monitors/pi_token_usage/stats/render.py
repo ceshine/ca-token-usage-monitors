@@ -26,12 +26,12 @@ def render_aggregated_daily_stats(
 
     cost_table = Table(title="Daily Aggregated Statistics", show_footer=True, title_justify="left")
     cost_table.add_column("Date", justify="left")
-    cost_table.add_column("Cost ($)", footer_style="bold", justify="right")
     cost_table.add_column("Requests", footer_style="bold", justify="right")
     cost_table.add_column("Input Tokens", footer_style="bold", justify="right")
     cost_table.add_column("Output Tokens", footer_style="bold", justify="right")
     cost_table.add_column("Cached Tokens", footer_style="bold", justify="right")
     cost_table.add_column("Cache Write Tokens", footer_style="bold", justify="right")
+    cost_table.add_column("Cost ($)", footer_style="bold", justify="right")
     cost_table.add_column("Total Tokens", footer_style="bold", justify="right")
 
     total_stats = UsageStats()
@@ -42,29 +42,59 @@ def render_aggregated_daily_stats(
         style = TABLE_ROW_STYLES[index % len(TABLE_ROW_STYLES)]
         cost_table.add_row(
             day.isoformat(),
-            f"{stats.cost:,.6f}",
             str(stats.count),
             f"{stats.input_tokens:,}",
             f"{stats.output_tokens:,}",
             f"{stats.cached_tokens:,}",
             f"{stats.cache_write_tokens:,}",
+            f"{stats.cost:,.6f}",
             f"{total_tokens:,}",
             style=style,
         )
 
-    cost_table.columns[1].footer = f"{total_stats.cost:,.6f}"
-    cost_table.columns[2].footer = str(total_stats.count)
-    cost_table.columns[3].footer = f"{total_stats.input_tokens:,}"
-    cost_table.columns[4].footer = f"{total_stats.output_tokens:,}"
-    cost_table.columns[5].footer = f"{total_stats.cached_tokens:,}"
-    cost_table.columns[6].footer = f"{total_stats.cache_write_tokens:,}"
+    cost_table.columns[1].footer = str(total_stats.count)
+    cost_table.columns[2].footer = f"{total_stats.input_tokens:,}"
+    cost_table.columns[3].footer = f"{total_stats.output_tokens:,}"
+    cost_table.columns[4].footer = f"{total_stats.cached_tokens:,}"
+    cost_table.columns[5].footer = f"{total_stats.cache_write_tokens:,}"
+    cost_table.columns[6].footer = f"{total_stats.cost:,.6f}"
     cost_table.columns[
         7
     ].footer = f"{(total_stats.input_tokens + total_stats.output_tokens + total_stats.cached_tokens + total_stats.cache_write_tokens):,}"
     console.print(cost_table)
 
 
-def render_daily_usage_statistics(report: DailyUsageStatistics, console: Console) -> None:
+def render_provider_daily_stats(
+    usage_by_model_day: dict[tuple[str, str, date], UsageStats],
+    console: Console,
+) -> None:
+    """Render a daily token usage table aggregated by provider (across models)."""
+    provider_day_stats: dict[tuple[str, date], UsageStats] = {}
+    for (provider, model, day), stats in usage_by_model_day.items():
+        key = (provider, day)
+        if key not in provider_day_stats:
+            provider_day_stats[key] = UsageStats()
+        provider_day_stats[key] += stats
+
+    sorted_keys = sorted(provider_day_stats.keys(), key=lambda item: (item[1], item[0]))
+    provider_data = [
+        ((day.isoformat(), provider), provider_day_stats[(provider, day)]) for provider, day in sorted_keys
+    ]
+    _print_usage_table(
+        "Daily Token Usage by Provider",
+        provider_data,
+        console,
+        show_date=True,
+        provider_col_only=True,
+    )
+    console.print("\n")
+
+
+def render_daily_usage_statistics(
+    report: DailyUsageStatistics,
+    console: Console,
+    show_provider_table: bool = False,
+) -> None:
     """Render daily and overall statistics tables."""
     if report.total_events == 0:
         console.print("No token usage events found in the database.")
@@ -78,11 +108,40 @@ def render_daily_usage_statistics(report: DailyUsageStatistics, console: Console
     _print_usage_table("Daily Token Usage by Model", daily_data, console, show_date=True)
     console.print("\n")
 
+    if show_provider_table:
+        render_provider_daily_stats(report.usage_by_model_day, console)
+
     render_aggregated_daily_stats(report.usage_by_model_day, console)
     console.print("\n")
 
     overall_data = sorted(report.overall_usage.items(), key=lambda item: item[0])
     _print_usage_table("Overall Token Usage by Model", overall_data, console, show_date=False)
+    console.print("\n")
+
+    if show_provider_table:
+        _render_overall_provider_stats(report.overall_usage, console)
+
+
+def _render_overall_provider_stats(
+    overall_usage: dict[tuple[str, str], UsageStats],
+    console: Console,
+) -> None:
+    """Render an overall token usage table aggregated by provider (across models)."""
+    provider_stats: dict[str, UsageStats] = {}
+    for (provider, model), stats in overall_usage.items():
+        if provider not in provider_stats:
+            provider_stats[provider] = UsageStats()
+        provider_stats[provider] += stats
+
+    sorted_providers = sorted(provider_stats.keys())
+    provider_data = [(provider, provider_stats[provider]) for provider in sorted_providers]
+    _print_usage_table(
+        "Overall Token Usage by Provider",
+        provider_data,
+        console,
+        show_date=False,
+        provider_col_only=True,
+    )
 
 
 def _print_usage_table(
@@ -90,6 +149,7 @@ def _print_usage_table(
     data: list[tuple[Any, UsageStats]],
     console: Console,
     show_date: bool = False,
+    provider_col_only: bool = False,
 ) -> None:
     """Render model token usage table with totals."""
     table = Table(
@@ -102,7 +162,8 @@ def _print_usage_table(
     if show_date:
         table.add_column("Date", justify="left")
     table.add_column("Provider", footer="Grand Total", justify="left")
-    table.add_column("Model", justify="left")
+    if not provider_col_only:
+        table.add_column("Model", justify="left")
     table.add_column("Requests", footer_style="bold", justify="right")
     table.add_column("Input Tokens", footer_style="bold", justify="right")
     table.add_column("Output Tokens", footer_style="bold", justify="right")
@@ -123,15 +184,23 @@ def _print_usage_table(
         row_style: str | None = None
 
         if show_date:
-            date_str, provider_name, model_name = key
+            date_str = key[0]
+            provider_name = key[1]
+            model_name = key[2] if not provider_col_only else None
             if last_date is not None and date_str != last_date:
                 style_index = (style_index + 1) % len(TABLE_ROW_STYLES)
             last_date = date_str
             row_style = TABLE_ROW_STYLES[style_index]
-            row_args.extend([date_str, provider_name, model_name])
+            row_args.append(date_str)
+            row_args.append(provider_name)
+            if not provider_col_only:
+                row_args.append(model_name)
         else:
-            provider_name, model_name = key
-            row_args.extend([provider_name, model_name])
+            if provider_col_only:
+                row_args.append(key)
+            else:
+                provider_name, model_name = key
+                row_args.extend([provider_name, model_name])
 
         row_args.extend(
             [
@@ -146,15 +215,17 @@ def _print_usage_table(
         )
         table.add_row(*row_args, style=row_style)
 
-    col_offset = 1 if show_date else 0
-    table.columns[2 + col_offset].footer = str(total_stats.count)
-    table.columns[3 + col_offset].footer = f"{total_stats.input_tokens:,}"
-    table.columns[4 + col_offset].footer = f"{total_stats.output_tokens:,}"
-    table.columns[5 + col_offset].footer = f"{total_stats.cached_tokens:,}"
-    table.columns[6 + col_offset].footer = f"{total_stats.cache_write_tokens:,}"
-    table.columns[7 + col_offset].footer = f"{total_stats.cost:,.6f}"
+    date_offset = 1 if show_date else 0
+    model_offset = 0 if provider_col_only else 1
+    col_offset = date_offset + 1 + model_offset
+    table.columns[col_offset].footer = str(total_stats.count)
+    table.columns[col_offset + 1].footer = f"{total_stats.input_tokens:,}"
+    table.columns[col_offset + 2].footer = f"{total_stats.output_tokens:,}"
+    table.columns[col_offset + 3].footer = f"{total_stats.cached_tokens:,}"
+    table.columns[col_offset + 4].footer = f"{total_stats.cache_write_tokens:,}"
+    table.columns[col_offset + 5].footer = f"{total_stats.cost:,.6f}"
     table.columns[
-        8 + col_offset
+        col_offset + 6
     ].footer = f"{(total_stats.input_tokens + total_stats.output_tokens + total_stats.cached_tokens + total_stats.cache_write_tokens):,}"
 
     console.print(table)
