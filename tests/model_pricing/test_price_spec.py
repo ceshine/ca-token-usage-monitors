@@ -29,8 +29,8 @@ def test_get_price_spec_uses_fresh_cache(tmp_path: Path, monkeypatch: pytest.Mon
     # Cached entries should be present in the merged result.
     assert result["gpt-5"] == cached_data["gpt-5"]
     # Crof.ai bundled data should also be merged.
-    assert "crof/deepseek-v4-pro" in result
-    assert "crof/qwen3.5-9b" in result
+    assert "crofai/deepseek-v4-pro" in result
+    assert "crofai/qwen3.5-9b" in result
 
 
 def test_get_price_spec_refreshes_stale_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -48,7 +48,7 @@ def test_get_price_spec_refreshes_stale_cache(tmp_path: Path, monkeypatch: pytes
 
     # Fetched data should be present and crof data merged.
     assert result["new"] == refreshed_data["new"]
-    assert "crof/deepseek-v4-pro" in result
+    assert "crofai/deepseek-v4-pro" in result
     # Cache file should contain only the fetched data (no crof merge).
     assert orjson.loads(cache_file.read_bytes()) == refreshed_data
     # Input dict should not be mutated by the merge.
@@ -75,7 +75,7 @@ def test_get_price_spec_falls_back_to_stale_cache_on_fetch_error(
 
     # Stale entries should be present and crof data merged.
     assert result["fallback"] == stale_data["fallback"]
-    assert "crof/deepseek-v4-pro" in result
+    assert "crofai/deepseek-v4-pro" in result
 
 
 def test_get_price_spec_uses_env_cache_path_when_cache_path_not_provided(
@@ -97,7 +97,7 @@ def test_get_price_spec_uses_env_cache_path_when_cache_path_not_provided(
 
     # Cached entries should be present and crof data merged.
     assert result["o3"] == cached_data["o3"]
-    assert "crof/deepseek-v4-pro" in result
+    assert "crofai/deepseek-v4-pro" in result
 
 
 def test_get_price_spec_disables_cache_when_cache_path_is_none(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -109,6 +109,6 @@ def test_get_price_spec_disables_cache_when_cache_path_is_none(monkeypatch: pyte
 
     # Fetched data should be present and crof data merged.
     assert result["gpt-4.1"] == fetched_data["gpt-4.1"]
-    assert "crof/deepseek-v4-pro" in result
+    assert "crofai/deepseek-v4-pro" in result
     # Input dict should not be mutated by the merge.
     assert fetched_data == {"gpt-4.1": {"input_cost_per_token": 0.004}}
