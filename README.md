@@ -1,6 +1,6 @@
 # Coding Agent Token Monitor
 
-CLI tools for monitoring token usage of coding agents. Currently supports Claude Code, OpenCode, Codex, and Gemini.
+CLI tools for monitoring token usage of coding agents. Currently supports Claude Code, OpenCode, Codex, Gemini, and Pi.
 
 (The Gemini tool is migrated from [ceshine/gemini-token-usage](https://github.com/ceshine/gemini-token-usage); this repository supersedes the original (now deprecated) project.)
 
@@ -14,6 +14,7 @@ This repository provides individual CLI tools for tracking, ingesting, and displ
 | **OpenCode** | `opencode-token-usage` | [OpenCode Usage Guide](./README_OPENCODE.md) |
 | **Codex** | `codex-token-usage` | [Codex Usage Guide](./README_CODEX.md) |
 | **Gemini CLI** | `gemini-token-usage` | [Gemini CLI Usage Guide](./README_GEMINI_CLI.md) |
+| **Pi** | `pi-token-usage` | [Pi Usage Guide](./README_PI.md) |
 
 ---
 
