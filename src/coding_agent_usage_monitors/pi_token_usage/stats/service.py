@@ -23,12 +23,14 @@ class StatsService:
         since: date | None = None,
         until: date | None = None,
         price_spec: dict[str, Any] | None = None,
+        use_api_reported_costs: bool = False,
     ) -> None:
         self._repository = repository
         self._timezone = timezone
         self._since = since
         self._until = until
         self._price_spec = price_spec if price_spec is not None else get_price_spec()
+        self._use_api_reported_costs = use_api_reported_costs
 
     def collect_daily_statistics(self) -> DailyUsageStatistics:
         """Aggregate token usage and costs by day, provider, and model."""
@@ -45,7 +47,10 @@ class StatsService:
             if self._until is not None and event_date >= self._until:
                 continue
 
-            event_cost = calculate_event_cost(event, self._price_spec)
+            if self._use_api_reported_costs:
+                event_cost = event.reported_cost_total_usd if event.reported_cost_total_usd is not None else 0.0
+            else:
+                event_cost = calculate_event_cost(event, self._price_spec)
 
             day_key = (event.provider_code, event.model_code, event_date)
             day_stats = usage_by_model_day[day_key]

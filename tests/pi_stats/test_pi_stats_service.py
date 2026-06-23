@@ -168,6 +168,102 @@ def test_collect_daily_statistics_groups_by_provider_and_model() -> None:
     assert report.overall_usage[("openrouter", "gpt-5")].input_tokens == 200
 
 
+def test_collect_daily_statistics_uses_api_reported_costs_when_flag_set() -> None:
+    """When use_api_reported_costs is True, costs should come from reported_cost_total_usd."""
+    events = [
+        TokenUsageEvent(
+            provider_code="opencode",
+            model_code="gpt-5",
+            event_timestamp=datetime(2026, 4, 13, 0, 0, tzinfo=UTC),
+            input_tokens=100,
+            cache_read_tokens=40,
+            cache_write_tokens=5,
+            output_tokens=10,
+            reported_cost_total_usd=0.05,
+        ),
+        TokenUsageEvent(
+            provider_code="opencode",
+            model_code="gpt-5",
+            event_timestamp=datetime(2026, 4, 13, 1, 0, tzinfo=UTC),
+            input_tokens=200,
+            cache_read_tokens=50,
+            cache_write_tokens=2,
+            output_tokens=20,
+            reported_cost_total_usd=0.12,
+        ),
+    ]
+    repository = _FakeStatsRepository(events)
+    service = StatsService(
+        repository=repository,
+        price_spec={"opencode/gpt-5": {"input_cost_per_token": 1000.0, "output_cost_per_token": 2000.0}},
+        use_api_reported_costs=True,
+    )
+
+    report = service.collect_daily_statistics()
+
+    overall = report.overall_usage[("opencode", "gpt-5")]
+    assert overall.cost == pytest.approx(0.05 + 0.12)
+
+
+def test_api_reported_costs_fallback_to_zero_when_missing() -> None:
+    """When use_api_reported_costs is True but reported_cost_total_usd is None, cost should be 0.0."""
+    events = [
+        TokenUsageEvent(
+            provider_code="opencode",
+            model_code="gpt-5",
+            event_timestamp=datetime(2026, 4, 13, 0, 0, tzinfo=UTC),
+            input_tokens=100,
+            cache_read_tokens=40,
+            cache_write_tokens=5,
+            output_tokens=10,
+            reported_cost_total_usd=None,
+        ),
+    ]
+    repository = _FakeStatsRepository(events)
+    service = StatsService(
+        repository=repository,
+        price_spec={"opencode/gpt-5": {"input_cost_per_token": 1000.0, "output_cost_per_token": 2000.0}},
+        use_api_reported_costs=True,
+    )
+
+    report = service.collect_daily_statistics()
+
+    overall = report.overall_usage[("opencode", "gpt-5")]
+    assert overall.cost == pytest.approx(0.0)
+
+
+def test_default_behavior_still_uses_calculated_costs() -> None:
+    """When use_api_reported_costs is False (default), costs should be calculated from pricing table."""
+    events = [
+        TokenUsageEvent(
+            provider_code="opencode",
+            model_code="big-pickle",
+            event_timestamp=datetime(2026, 4, 13, 0, 0, tzinfo=UTC),
+            input_tokens=100,
+            cache_read_tokens=20,
+            cache_write_tokens=10,
+            output_tokens=10,
+            reported_cost_total_usd=999.0,
+        ),
+    ]
+    repository = _FakeStatsRepository(events)
+    price_spec = {
+        "opencode/big-pickle": {
+            "input_cost_per_token": 1.0,
+            "output_cost_per_token": 2.0,
+            "cache_read_input_token_cost": 0.5,
+            "cache_creation_input_token_cost": 0.25,
+        }
+    }
+    service = StatsService(repository=repository, price_spec=price_spec)
+
+    report = service.collect_daily_statistics()
+
+    overall = report.overall_usage[("opencode", "big-pickle")]
+    expected = (100 * 1.0) + (10 * 2.0) + (20 * 0.5) + (10 * 0.25)
+    assert overall.cost == pytest.approx(expected)
+
+
 class _FakeStatsRepository:
     """Simple in-memory repository for stats tests."""
 

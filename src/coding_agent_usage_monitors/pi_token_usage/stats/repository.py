@@ -37,7 +37,8 @@ SELECT
     input_tokens,
     cache_read_tokens,
     cache_write_tokens,
-    output_tokens
+    output_tokens,
+    pi_reported_cost_total_usd
 FROM pi_usage_events
 ORDER BY event_timestamp, provider_code, model_code
                 """
@@ -59,6 +60,7 @@ ORDER BY event_timestamp, provider_code, model_code
                     cache_read_tokens=int(row[4]),
                     cache_write_tokens=int(row[5]),
                     output_tokens=int(row[6]),
+                    reported_cost_total_usd=row[7],
                 )
             )
         return events

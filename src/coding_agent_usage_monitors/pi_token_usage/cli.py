@@ -51,6 +51,11 @@ def ingest_command(
         "--full-refresh",
         help="Bypass file-state cache and per-session checkpoint; re-upsert every row.",
     ),
+    api_reported_costs: bool = typer.Option(
+        False,
+        "--api-reported-costs",
+        help="Use costs reported by the API instead of calculating from token counts and pricing table.",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable info-level logging."),
 ) -> None:
     """Ingest Pi agent session token usage into DuckDB."""
@@ -61,7 +66,7 @@ def ingest_command(
         full_refresh=full_refresh,
     )
     _emit_summary(counters)
-    _emit_last_7_days_stats(database_path=database_path, console=Console())
+    _emit_last_7_days_stats(database_path=database_path, console=Console(), use_api_reported_costs=api_reported_costs)
     if counters.failed_files:
         raise typer.Exit(code=1)
 
@@ -95,6 +100,11 @@ def stats_command(
         "--provider",
         help="Show a daily token usage breakdown aggregated by provider.",
     ),
+    api_reported_costs: bool = typer.Option(
+        False,
+        "--api-reported-costs",
+        help="Use costs reported by the API instead of calculating from token counts and pricing table.",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable info-level logging."),
 ) -> None:
     """Aggregate and print daily token usage and costs from DuckDB."""
@@ -110,6 +120,7 @@ def stats_command(
         timezone=resolved_timezone,
         since=since_date,
         until=until_date,
+        use_api_reported_costs=api_reported_costs,
     )
     render_daily_usage_statistics(report, Console(), show_provider_table=provider)
 
@@ -163,11 +174,20 @@ def _emit_summary(counters: IngestionCounters) -> None:
         typer.echo(f"failed_file={failed_file}")
 
 
-def _emit_last_7_days_stats(database_path: Path, console: Console) -> None:
+def _emit_last_7_days_stats(
+    database_path: Path,
+    console: Console,
+    use_api_reported_costs: bool = False,
+) -> None:
     """Render usage statistics from ingested events over the last seven days."""
     today = datetime.now().date()
     since_date = today - timedelta(days=6)
-    report = _collect_stats_report(database_path=database_path, timezone=None, since=since_date)
+    report = _collect_stats_report(
+        database_path=database_path,
+        timezone=None,
+        since=since_date,
+        use_api_reported_costs=use_api_reported_costs,
+    )
     typer.echo("\nStatistics (last 7 days):")
     render_daily_usage_statistics(report=report, console=console)
 
@@ -177,12 +197,19 @@ def _collect_stats_report(
     timezone: ZoneInfo | None,
     since: date | None,
     until: date | None = None,
+    use_api_reported_costs: bool = False,
 ) -> DailyUsageStatistics:
     """Collect daily stats report from database events with optional date filtering."""
     repository: StatsRepository | None = None
     try:
         repository = StatsRepository(database_path)
-        service = StatsService(repository=repository, timezone=timezone, since=since, until=until)
+        service = StatsService(
+            repository=repository,
+            timezone=timezone,
+            since=since,
+            until=until,
+            use_api_reported_costs=use_api_reported_costs,
+        )
         return service.collect_daily_statistics()
     except (StatsRepositoryError, RuntimeError) as exc:
         raise typer.BadParameter(str(exc)) from exc

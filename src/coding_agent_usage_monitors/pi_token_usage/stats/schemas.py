@@ -17,6 +17,7 @@ class TokenUsageEvent:
     cache_read_tokens: int
     cache_write_tokens: int
     output_tokens: int
+    reported_cost_total_usd: float | None = None
 
 
 @dataclass
