@@ -27,18 +27,20 @@ def read_varint(data: bytes, offset: int) -> tuple[int, int]:
         tuple[int, int]: Decoded varint integer and the new byte offset.
 
     Raises:
-        ProtobufParseError: If varint is unterminated, truncated, or exceeds 10 bytes.
+        ProtobufParseError: If varint is unterminated, truncated, exceeds 10 bytes, or exceeds uint64 range.
     """
     res = 0
     shift = 0
     idx = offset
-    for _ in range(10):
+    for byte_index in range(10):
         if idx >= len(data):
             raise ProtobufParseError("Truncated varint in payload", byte_offset=offset)
         b = data[idx]
         idx += 1
         res |= (b & 0x7F) << shift
         if not (b & 0x80):
+            if byte_index == 9 and b > 0x01:
+                raise ProtobufParseError("Varint overflow (exceeds uint64 range)", byte_offset=offset)
             return res, idx
         shift += 7
     raise ProtobufParseError("Varint overflow (exceeds 10 bytes)", byte_offset=offset)

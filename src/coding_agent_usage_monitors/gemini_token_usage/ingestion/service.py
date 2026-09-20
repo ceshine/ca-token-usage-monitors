@@ -6,7 +6,8 @@ import shlex
 from uuid import UUID
 from pathlib import Path
 from datetime import UTC, datetime
-from typing import final, Callable
+from typing import final
+from collections.abc import Callable
 
 from .errors import PathResolutionError, SourceConflictError
 from .parser import parse_usage_jsonl

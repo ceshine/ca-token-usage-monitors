@@ -29,7 +29,7 @@ class UsageStats:
     count: int = 0
     cost: float = 0.0
 
-    def __add__(self, other: "UsageStats") -> "UsageStats":
+    def __add__(self, other: UsageStats) -> UsageStats:
         """Return a new object with summed stats."""
         return UsageStats(
             input_tokens=self.input_tokens + other.input_tokens,
@@ -40,7 +40,7 @@ class UsageStats:
             cost=self.cost + other.cost,
         )
 
-    def __iadd__(self, other: "UsageStats") -> "UsageStats":
+    def __iadd__(self, other: UsageStats) -> UsageStats:
         """Mutate this object by adding stats in-place."""
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens

@@ -22,7 +22,7 @@ DEFAULT_OUTPUT_PATH = (
     / "model_pricing"
     / "crof-ai.json"
 )
-USD_PER_MILLION_TOKENS = Decimal("1000000")
+USD_PER_MILLION_TOKENS = Decimal(1000000)
 
 
 def fetch_crof_models(url: str = DEFAULT_CROF_MODELS_URL) -> dict[str, Any]:

@@ -9,10 +9,9 @@ from typing import Any
 
 import orjson
 
-from ..preprocessing.metadata import read_project_metadata
-
 from .errors import ParseError, DuplicateEventError, MetadataValidationError, AppendOnlyViolationError
 from .schemas import UsageEventRow, ParsedJsonlFile, SourceCheckpoint
+from ..preprocessing.metadata import read_project_metadata
 
 
 def parse_usage_jsonl(
@@ -59,10 +58,8 @@ def parse_usage_jsonl(
             prior_line_number = seen_event_keys.get(event_key)
             if prior_line_number is not None:
                 raise DuplicateEventError(
-                    (
-                        f"Duplicate usage event key {(event_timestamp.isoformat(), model_code)} in {jsonl_file_path}: "
-                        f"line {prior_line_number} and line {line_number}."
-                    )
+                    f"Duplicate usage event key {(event_timestamp.isoformat(), model_code)} in {jsonl_file_path}: "
+                    f"line {prior_line_number} and line {line_number}."
                 )
             seen_event_keys[event_key] = line_number
 
@@ -115,10 +112,8 @@ def parse_usage_jsonl(
         checkpoint_key = (checkpoint.last_event_timestamp, checkpoint.last_model_code)
         if max_event_key is None or max_event_key < checkpoint_key:
             raise AppendOnlyViolationError(
-                (
-                    "Detected non-append-only rewrite for "
-                    f"{jsonl_file_path}: max event key {max_event_key} is behind checkpoint {checkpoint_key}."
-                )
+                "Detected non-append-only rewrite for "
+                f"{jsonl_file_path}: max event key {max_event_key} is behind checkpoint {checkpoint_key}."
             )
 
     return ParsedJsonlFile(
@@ -137,10 +132,8 @@ def _read_validated_metadata(jsonl_file_path: Path, expected_project_id: UUID):
         raise MetadataValidationError(str(exc)) from exc
     if metadata.project_id != expected_project_id:
         raise MetadataValidationError(
-            (
-                f"Metadata project_id mismatch for {jsonl_file_path}: expected {expected_project_id}, "
-                f"got {metadata.project_id}."
-            )
+            f"Metadata project_id mismatch for {jsonl_file_path}: expected {expected_project_id}, "
+            f"got {metadata.project_id}."
         )
     return metadata
 
@@ -180,10 +173,8 @@ def _parse_required_timestamp(
 def _parse_required_model_code(value: Any, jsonl_file_path: Path, line_number: int) -> str:
     if not isinstance(value, str) or not value:
         raise ParseError(
-            (
-                f"Missing or invalid attributes.model in {jsonl_file_path} at line {line_number}: "
-                "expected non-empty string."
-            )
+            f"Missing or invalid attributes.model in {jsonl_file_path} at line {line_number}: "
+            "expected non-empty string."
         )
     return value
 

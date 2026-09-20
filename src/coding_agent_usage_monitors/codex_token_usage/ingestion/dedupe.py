@@ -27,10 +27,8 @@ def dedupe_and_validate_token_rows(session_file_path: Path, token_rows: list[Tok
 
         if not _rows_have_matching_payload(existing_row, row, session_file_path):
             raise DuplicateConflictError(
-                (
-                    f"Conflicting duplicate total_tokens_cumulative={cumulative} in {session_file_path}: "
-                    f"line {existing_row.event_line_number} vs line {row.event_line_number}."
-                )
+                f"Conflicting duplicate total_tokens_cumulative={cumulative} in {session_file_path}: "
+                f"line {existing_row.event_line_number} vs line {row.event_line_number}."
             )
         duplicate_rows_skipped += 1
 
@@ -60,11 +58,9 @@ def _validate_monotonicity_and_deltas(session_file_path: Path, token_rows: list[
     for current in token_rows[1:]:
         if current.total_tokens_cumulative <= previous.total_tokens_cumulative:
             raise MonotonicityError(
-                (
-                    f"Cumulative total decreased or stalled in {session_file_path}: "
-                    f"line {previous.event_line_number} ({previous.total_tokens_cumulative}) -> "
-                    f"line {current.event_line_number} ({current.total_tokens_cumulative})."
-                )
+                f"Cumulative total decreased or stalled in {session_file_path}: "
+                f"line {previous.event_line_number} ({previous.total_tokens_cumulative}) -> "
+                f"line {current.event_line_number} ({current.total_tokens_cumulative})."
             )
 
         _validate_row_delta(session_file_path, previous, current)
@@ -86,11 +82,9 @@ def _validate_row_delta(session_file_path: Path, previous: TokenEventRow, curren
         actual_delta = _usage_field(current.last_usage, field_name)
         if expected_delta != actual_delta:
             raise DeltaConsistencyError(
-                (
-                    f"Delta mismatch for {field_name} in {session_file_path}: "
-                    f"line {previous.event_line_number} -> line {current.event_line_number}, "
-                    f"expected {expected_delta}, got {actual_delta}."
-                )
+                f"Delta mismatch for {field_name} in {session_file_path}: "
+                f"line {previous.event_line_number} -> line {current.event_line_number}, "
+                f"expected {expected_delta}, got {actual_delta}."
             )
 
 

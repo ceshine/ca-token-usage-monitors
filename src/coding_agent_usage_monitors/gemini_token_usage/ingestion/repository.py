@@ -10,8 +10,9 @@ from collections.abc import Iterator
 
 import duckdb
 
-from .schemas import UsageEventRow, JsonlFileState, SourceCheckpoint, IngestionSourceRow
 from coding_agent_usage_monitors.common.database import parse_db_timestamp
+
+from .schemas import UsageEventRow, JsonlFileState, SourceCheckpoint, IngestionSourceRow
 
 
 class IngestionRepository:

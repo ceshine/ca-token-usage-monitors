@@ -6,7 +6,7 @@ import logging
 from uuid import UUID
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Callable
+from collections.abc import Callable
 
 from .errors import SourceConflictError, MetadataValidationError, ConfirmationDeclinedError
 from .schemas import IngestionSourceRow
@@ -80,10 +80,8 @@ class SourceBookkeepingService:
 
         if source_by_path is not None and source_by_path.project_id != metadata.project_id:
             raise SourceConflictError(
-                (
-                    f"Tracked source path {jsonl_file_path} maps to project_id {source_by_path.project_id}, "
-                    f"but metadata contains {metadata.project_id}."
-                )
+                f"Tracked source path {jsonl_file_path} maps to project_id {source_by_path.project_id}, "
+                f"but metadata contains {metadata.project_id}."
             )
 
         if source_by_path is not None:
@@ -115,18 +113,14 @@ class SourceBookkeepingService:
         old_path = Path(existing_source.jsonl_file_path)
         if old_path != new_path and _old_path_still_valid_for_project(old_path, existing_source.project_id):
             raise SourceConflictError(
-                (
-                    "Detected multiple valid paths for the same project_id. "
-                    f"Existing path: {old_path}. New path: {new_path}. "
-                    "Resolve this manually before ingestion."
-                )
+                "Detected multiple valid paths for the same project_id. "
+                f"Existing path: {old_path}. New path: {new_path}. "
+                "Resolve this manually before ingestion."
             )
         if not self._confirm_project_path_move(existing_source, new_path):
             raise ConfirmationDeclinedError(
-                (
-                    "Project path update declined for project_id="
-                    f"{existing_source.project_id}: {existing_source.jsonl_file_path} -> {new_path}"
-                )
+                "Project path update declined for project_id="
+                f"{existing_source.project_id}: {existing_source.jsonl_file_path} -> {new_path}"
             )
         self._repository.update_source_path(existing_source.project_id, str(new_path))
 

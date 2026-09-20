@@ -17,7 +17,6 @@ from typing import Annotated
 import typer
 import duckdb
 
-
 APP = typer.Typer(add_completion=False, help=__doc__)
 
 
