@@ -197,7 +197,7 @@ def test_stats_command_handles_empty_database(tmp_path: Path, monkeypatch: pytes
     database_path = tmp_path / "usage.duckdb"
     _create_stats_database(database_path, [])
 
-    monkeypatch.setattr("coding_agent_usage_monitors.codex_token_usage.stats.service.get_price_spec", lambda: {})
+    monkeypatch.setattr("coding_agent_usage_monitors.codex_token_usage.stats.service.get_price_spec", dict)
 
     runner = CliRunner()
     result = runner.invoke(TYPER_APP, ["stats", "--database-path", str(database_path)])

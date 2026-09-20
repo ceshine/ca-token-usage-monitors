@@ -107,7 +107,7 @@ def test_stats_command_since_filters_older_days(tmp_path: Path, monkeypatch) -> 
             },
         ],
     )
-    monkeypatch.setattr("coding_agent_usage_monitors.opencode_token_usage.stats.service.get_price_spec", lambda: {})
+    monkeypatch.setattr("coding_agent_usage_monitors.opencode_token_usage.stats.service.get_price_spec", dict)
 
     runner = CliRunner()
     result = runner.invoke(
