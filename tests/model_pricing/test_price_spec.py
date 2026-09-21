@@ -13,6 +13,46 @@ import pytest
 from coding_agent_usage_monitors.common.model_pricing import price_spec as price_spec_module
 
 
+def test_transform_models_dev_format_preserves_cache_write_price() -> None:
+    """Models.dev cache-write prices should become cache-creation token prices."""
+    raw_data = {
+        "google": {
+            "id": "google",
+            "models": {
+                "gemini-3.8-flash": {
+                    "cost": {
+                        "input": 0.75,
+                        "output": 3.75,
+                        "cache_read": 0.075,
+                        "cache_write": 0.041667,
+                    }
+                }
+            },
+        }
+    }
+
+    transformed = price_spec_module._transform_models_dev_format(raw_data)
+
+    assert transformed["google/gemini-3.8-flash"]["cache_creation_input_token_cost"] == pytest.approx(
+        0.041667 / 1_000_000
+    )
+
+
+def test_get_price_spec_refetches_when_cached_json_has_unexpected_shape(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Structurally invalid cached JSON should trigger a refetch instead of crashing."""
+    cache_file = tmp_path / "prices.json"
+    cache_file.write_bytes(orjson.dumps([{"unexpected": "list"}]))
+    fetched_data = {"gpt-5": {"input_cost_per_token": 0.001}}
+    monkeypatch.setattr(price_spec_module, "_fetch_from_url", lambda _: fetched_data)
+
+    result = price_spec_module.get_price_spec(update_interval_seconds=86400, cache_path=cache_file)
+
+    assert result["gpt-5"] == fetched_data["gpt-5"]
+
+
 def test_get_price_spec_uses_fresh_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Fresh cache should be returned without attempting a remote fetch."""
     cache_file = tmp_path / "prices.json"
