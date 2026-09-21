@@ -27,7 +27,7 @@ def resolve_preprocess_input(log_file_path: Path) -> PreprocessInputResolution:
         if jsonl_file is not None:
             return PreprocessInputResolution(source_log_file=None, jsonl_file=jsonl_file)
         raise FileNotFoundError(
-            (f"Could not find telemetry.log or telemetry.jsonl in {log_file_path} nor in its '.gemini' subdirectory.")
+            f"Could not find telemetry.log or telemetry.jsonl in {log_file_path} nor in its '.gemini' subdirectory."
         )
 
     if not log_file_path.exists():

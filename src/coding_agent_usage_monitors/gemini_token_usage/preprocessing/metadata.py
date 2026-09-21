@@ -85,19 +85,15 @@ def _parse_metadata_object(parsed: dict[str, Any], jsonl_path: Path) -> ProjectM
     record_type = parsed.get("record_type")
     if record_type != PROJECT_METADATA_RECORD_TYPE:
         raise ValueError(
-            (
-                f"Malformed metadata in {jsonl_path}: expected record_type="
-                f"{PROJECT_METADATA_RECORD_TYPE!r}, got {record_type!r}."
-            )
+            f"Malformed metadata in {jsonl_path}: expected record_type="
+            f"{PROJECT_METADATA_RECORD_TYPE!r}, got {record_type!r}."
         )
 
     schema_version = parsed.get("schema_version")
     if schema_version != PROJECT_METADATA_SCHEMA_VERSION:
         raise ValueError(
-            (
-                f"Malformed metadata in {jsonl_path}: expected schema_version="
-                f"{PROJECT_METADATA_SCHEMA_VERSION}, got {schema_version!r}."
-            )
+            f"Malformed metadata in {jsonl_path}: expected schema_version="
+            f"{PROJECT_METADATA_SCHEMA_VERSION}, got {schema_version!r}."
         )
 
     project_id_value = parsed.get("project_id")

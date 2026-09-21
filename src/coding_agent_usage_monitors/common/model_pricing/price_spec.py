@@ -20,6 +20,11 @@ _CROF_JSON_PATH = Path(__file__).parent / "crof-ai.json"
 
 
 DEFAULT_PRICE_CACHE_PATH = get_default_price_cache_path()
+_CACHE_READ_ERRORS = (OSError, orjson.JSONDecodeError, KeyError, TypeError, AttributeError)
+
+
+class PriceSpecError(RuntimeError):
+    """Raised when the model price specification cannot be loaded from cache or network."""
 
 
 def _fetch_from_url(url: str) -> dict[str, Any]:
@@ -29,7 +34,7 @@ def _fetch_from_url(url: str) -> dict[str, Any]:
         response.raise_for_status()
         return orjson.loads(response.content)
     except Exception as exc:  # pragma: no cover - network failures vary by runtime.
-        raise RuntimeError(f"Failed to fetch price spec from {url}") from exc
+        raise PriceSpecError(f"Failed to fetch price spec from {url}") from exc
 
 
 def _transform_models_dev_format(raw_data: dict[str, Any]) -> dict[str, Any]:
@@ -79,6 +84,8 @@ def _transform_models_dev_format(raw_data: dict[str, Any]) -> dict[str, Any]:
                 entry["output_cost_per_token"] = cost["output"] / 1_000_000.0
             if "cache_read" in cost:
                 entry["cache_read_input_token_cost"] = cost["cache_read"] / 1_000_000.0
+            if "cache_write" in cost:
+                entry["cache_creation_input_token_cost"] = cost["cache_write"] / 1_000_000.0
             # Tiered pricing (>200k tokens).
             context_over = cost.get("context_over_200k", {})
             if isinstance(context_over, dict):
@@ -164,7 +171,7 @@ def get_price_spec(
         Model pricing data keyed by model code.
 
     Raises:
-        RuntimeError: If no usable fresh/stale cache exists and remote fetch fails.
+        PriceSpecError: If no usable fresh/stale cache exists and remote fetch fails.
     """
     effective_cache_path = _resolve_cache_path(cache_path)
 
@@ -177,7 +184,7 @@ def get_price_spec(
             try:
                 with effective_cache_path.open("rb") as handle:
                     return _merge_crof_pricing(orjson.loads(handle.read()))
-            except Exception:
+            except _CACHE_READ_ERRORS:
                 LOGGER.error("Failed reading fresh cache at %s; refetching.", effective_cache_path)
 
     # Cache miss or stale - fetch from URL and update cache
@@ -189,15 +196,15 @@ def get_price_spec(
             try:
                 with effective_cache_path.open("rb") as handle:
                     return _merge_crof_pricing(orjson.loads(handle.read()))
-            except Exception:
+            except _CACHE_READ_ERRORS:
                 LOGGER.error("Failed reading stale cache at %s after fetch error.", effective_cache_path)
-        raise RuntimeError(f"Failed to fetch price spec from {url}") from exc
+        raise PriceSpecError(f"Failed to fetch price spec from {url}") from exc
 
     try:
         effective_cache_path.parent.mkdir(parents=True, exist_ok=True)
         with effective_cache_path.open("wb") as handle:
             handle.write(orjson.dumps(json_data))
-    except Exception:
+    except (OSError, TypeError):
         LOGGER.error("Failed writing price cache at %s.", effective_cache_path)
 
     return _merge_crof_pricing(json_data)

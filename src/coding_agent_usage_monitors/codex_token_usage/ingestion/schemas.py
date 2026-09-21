@@ -7,7 +7,6 @@ from pathlib import Path
 from datetime import datetime
 from dataclasses import field, dataclass
 
-
 TOKEN_FIELDS: tuple[str, ...] = (
     "input_tokens",
     "cached_input_tokens",

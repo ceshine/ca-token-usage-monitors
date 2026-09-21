@@ -6,12 +6,13 @@ import logging
 from uuid import UUID
 from pathlib import Path
 from contextlib import contextmanager
-from typing import Iterator
+from collections.abc import Iterator
 
 import duckdb
 
-from .schemas import TokenEventRow, SessionCheckpoint, IngestionFileState, SessionMetadataRow
 from coding_agent_usage_monitors.common.database import parse_db_timestamp
+
+from .schemas import TokenEventRow, SessionCheckpoint, IngestionFileState, SessionMetadataRow
 
 LOGGER = logging.getLogger(__name__)
 

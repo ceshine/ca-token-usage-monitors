@@ -16,3 +16,6 @@ opencode.json
 .zed
 
 *.jsonl
+*.duckdb
+
+.pi

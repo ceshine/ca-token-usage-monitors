@@ -10,6 +10,7 @@ from collections import defaultdict
 from typing import Any
 
 import orjsonl
+
 from coding_agent_usage_monitors.common.model_pricing import get_price_spec
 
 from .schemas import UsageStats, TokenUsageEvent, DailyUsageStatistics
