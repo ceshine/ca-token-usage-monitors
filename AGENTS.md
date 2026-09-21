@@ -74,13 +74,6 @@ When writing or modifying Python code, you **MUST** adhere to the PEP-8 style gu
     1.  Standard library imports (e.g., `os`, `sys`, `json`)
     2.  Third-party imports (e.g., `fastapi`, `pydantic`, `uvicorn`)
     3.  Local application/monorepo-specific imports
-- **Import Sorting:** Within each group, the imports should be ordered using the following rules:
-    - `import ...` statements come first, then `from ... import ...` statements.
-    - Sort module paths level-by-level: compare the first segment, then the second only if the first segments are equal, and so on.
-    - **Segment comparison:** a shorter segment ranks before a longer one; if two segments have the same length but different text, use alphabetical order as the tiebreaker.
-    - **Parent before child:** when one path is the parent of another (e.g. `a.b` vs `a.b.c`), the parent always comes first.
-    - Example: `import abc.abc.def` comes before `import abc.abcd.d` because `abc` == `abc` at level 1, then `abc` (length 3) < `abcd` (length 4) at level 2.
-    - Exception: Always put `from typing import ...` at the bottom of the standard library group.
 - Naming conventions, and whitespace.
 - **Docstrings:** Follow Google's Python style guide for docstrings strictly. Even when the function signature contains type annotations, include the parameter and return type information in the docstring.
 
