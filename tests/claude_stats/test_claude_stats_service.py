@@ -35,12 +35,11 @@ def test_calculate_event_cost_uses_direct_model_key() -> None:
             "input_cost_per_token": 1.0,
             "output_cost_per_token": 2.0,
             "cache_read_input_token_cost": 0.5,
-            "cache_creation_input_token_cost": 0.25,
         }
     }
 
     cost = calculate_event_cost(event, price_spec)
-    expected = (100 * 1.0) + (10 * 2.0) + (20 * 0.5) + (10 * 0.25)
+    expected = (100 * 1.0) + (10 * 2.0) + (20 * 0.5) + (10 * 2.0)
 
     assert cost == pytest.approx(expected)
 
@@ -60,18 +59,17 @@ def test_calculate_event_cost_falls_back_to_anthropic_prefix() -> None:
             "input_cost_per_token": 1.0,
             "output_cost_per_token": 2.0,
             "cache_read_input_token_cost": 0.5,
-            "cache_creation_input_token_cost": 0.25,
         }
     }
 
     cost = calculate_event_cost(event, price_spec)
-    expected = (100 * 1.0) + (10 * 2.0) + (20 * 0.5) + (10 * 0.25)
+    expected = (100 * 1.0) + (10 * 2.0) + (20 * 0.5) + (10 * 2.0)
 
     assert cost == pytest.approx(expected)
 
 
-def test_calculate_event_cost_falls_back_to_input_cost_for_missing_cache_write_pricing() -> None:
-    """Missing cache write price should fall back to input token price."""
+def test_calculate_event_cost_ignores_pricing_data_cache_write_cost() -> None:
+    """Cache writes should be priced at 2x input, ignoring cache-write prices in the price spec."""
     event = TokenUsageEvent(
         model_code="claude-test-model",
         event_timestamp=datetime(2026, 2, 22, 0, 0, tzinfo=UTC),
@@ -85,11 +83,40 @@ def test_calculate_event_cost_falls_back_to_input_cost_for_missing_cache_write_p
             "input_cost_per_token": 1.0,
             "output_cost_per_token": 2.0,
             "cache_read_input_token_cost": 0.5,
+            "cache_creation_input_token_cost": 1.25,
+            "cache_creation_input_token_cost_above_200k_tokens": 3.0,
         }
     }
 
     cost = calculate_event_cost(event, price_spec)
-    expected = (100 * 1.0) + (10 * 2.0) + (20 * 0.5) + (10 * 1.0)
+    expected = (100 * 1.0) + (10 * 2.0) + (20 * 0.5) + (10 * 2.0)
+
+    assert cost == pytest.approx(expected)
+
+
+def test_calculate_event_cost_cache_write_uses_long_context_input_price() -> None:
+    """Above 200k context tokens, cache writes should be 2x the long-context input price."""
+    event = TokenUsageEvent(
+        model_code="claude-test-model",
+        event_timestamp=datetime(2026, 2, 22, 0, 0, tzinfo=UTC),
+        input_tokens=200000,
+        output_tokens=10,
+        cache_creation_input_tokens=10,
+        cache_read_input_tokens=20,
+    )
+    price_spec = {
+        "claude-test-model": {
+            "input_cost_per_token": 1.0,
+            "output_cost_per_token": 2.0,
+            "cache_read_input_token_cost": 0.5,
+            "input_cost_per_token_above_200k_tokens": 3.0,
+            "output_cost_per_token_above_200k_tokens": 4.0,
+            "cache_read_input_token_cost_above_200k_tokens": 1.5,
+        }
+    }
+
+    cost = calculate_event_cost(event, price_spec)
+    expected = (200000 * 3.0) + (10 * 4.0) + (20 * 1.5) + (10 * 3.0 * 2.0)
 
     assert cost == pytest.approx(expected)
 

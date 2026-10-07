@@ -12,6 +12,11 @@ from coding_agent_usage_monitors.common.model_pricing import get_price_spec
 from .schemas import UsageStats, TokenUsageEvent, DailyUsageStatistics
 from .repository import StatsRepository
 
+# Prompt-cache write prices relative to the base input price. Claude Code now defaults to 1h writes for
+# plan subscribers, and the logs do not distinguish TTLs, so all cache writes are priced as 1h writes.
+CACHE_WRITE_5M_MULTIPLIER = 1.25
+CACHE_WRITE_1H_MULTIPLIER = 2.0
+
 
 class StatsService:
     """Collect daily usage and cost statistics from persisted token events."""
@@ -86,15 +91,23 @@ class StatsService:
 
 
 def calculate_event_cost(event: TokenUsageEvent, price_spec: dict[str, Any]) -> float:
-    """Calculate USD cost for one event using model pricing data."""
+    """Calculate USD cost for one event using model pricing data.
+
+    Cache writes are priced as 1h writes (``CACHE_WRITE_1H_MULTIPLIER`` times the input token price) because
+    the session logs do not distinguish 5m from 1h writes. The cache-write prices in the pricing data are
+    ignored.
+
+    Args:
+        event (TokenUsageEvent): Token usage event to price.
+        price_spec (dict[str, Any]): Model pricing data keyed by model name.
+
+    Returns:
+        float: Total cost in USD.
+    """
     model_price_spec = _resolve_model_price_spec(event.model_code, price_spec)
     input_cost_per_token = model_price_spec.get("input_cost_per_token", 0.0)
     output_cost_per_token = model_price_spec.get("output_cost_per_token", 0.0)
     cache_read_cost_per_token = model_price_spec.get("cache_read_input_token_cost", 0.0)
-    cache_write_cost_per_token = model_price_spec.get(
-        "cache_creation_input_token_cost",
-        input_cost_per_token,
-    )
 
     total_context_tokens = event.input_tokens + event.cache_read_input_tokens + event.cache_creation_input_tokens
     if total_context_tokens > 200000:
@@ -104,10 +117,8 @@ def calculate_event_cost(event: TokenUsageEvent, price_spec: dict[str, Any]) -> 
             "cache_read_input_token_cost_above_200k_tokens",
             cache_read_cost_per_token,
         )
-        cache_write_cost_per_token = model_price_spec.get(
-            "cache_creation_input_token_cost_above_200k_tokens",
-            cache_write_cost_per_token,
-        )
+
+    cache_write_cost_per_token = input_cost_per_token * CACHE_WRITE_1H_MULTIPLIER
 
     return float(
         (event.input_tokens * input_cost_per_token)

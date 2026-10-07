@@ -64,3 +64,9 @@ uv run claude-token-usage stats --since 2026-01-01 --until 2026-02-01 --timezone
 # Show stats only for a specific project
 uv run claude-token-usage stats --cwd /path/to/my-project
 ```
+
+### Cost calculation
+
+Costs are computed at report time from token counts and model prices (sourced from models.dev), so changes to the pricing rules apply retroactively to all ingested data.
+
+Prompt-cache writes are priced as 1-hour writes (2× the input token price), matching Claude Code's default for plan subscribers. The session logs and the models.dev price data do not distinguish 5-minute writes (1.25× the input token price) from 1-hour writes, so sessions that actually used 5-minute caching are slightly overestimated. Cache-write prices from models.dev are ignored; the cache-write price is derived from the input token price (including the long-context tier above 200k tokens).
