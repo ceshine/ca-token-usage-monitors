@@ -59,7 +59,6 @@ class StatsService:
         """Aggregate token usage and costs by day and model."""
         events = self._repository.fetch_token_events(cwd=self._cwd)
         usage_by_model_day: dict[tuple[str, date], UsageStats] = defaultdict(UsageStats)
-        daily_costs: dict[date, float] = defaultdict(float)
         overall_usage: dict[str, UsageStats] = defaultdict(UsageStats)
         total_events = 0
 
@@ -79,12 +78,10 @@ class StatsService:
             model_stats = overall_usage[event.model_code]
             _accumulate_usage_stats(model_stats, event, event_cost)
 
-            daily_costs[event_date] += event_cost
             total_events += 1
 
         return DailyUsageStatistics(
             usage_by_model_day=dict(usage_by_model_day),
-            daily_costs=dict(daily_costs),
             overall_usage=dict(overall_usage),
             total_events=total_events,
         )

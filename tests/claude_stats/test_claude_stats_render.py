@@ -23,7 +23,6 @@ def test_render_daily_usage_statistics_includes_model_values() -> None:
                 cost=0.572,
             )
         },
-        daily_costs={date(2026, 2, 22): 0.572},
         overall_usage={
             "claude-sonnet-4-5-20250514": UsageStats(
                 input_tokens=160,
@@ -51,7 +50,6 @@ def test_render_daily_usage_statistics_includes_aggregated_daily_table() -> None
             ("model-a", date(2026, 2, 22)): UsageStats(input_tokens=100, output_tokens=10, count=2, cost=0.1),
             ("model-b", date(2026, 2, 22)): UsageStats(input_tokens=50, output_tokens=5, count=3, cost=0.2),
         },
-        daily_costs={date(2026, 2, 22): 0.3},
         overall_usage={},
         total_events=5,
     )
@@ -75,7 +73,6 @@ def test_render_daily_usage_statistics_aggregated_table_sorts_days_and_sums_foot
             ),
             ("model-a", date(2026, 2, 22)): UsageStats(input_tokens=100, output_tokens=10, count=2, cost=0.1),
         },
-        daily_costs={date(2026, 2, 22): 0.1, date(2026, 2, 23): 0.5},
         overall_usage={},
         total_events=3,
     )
@@ -101,7 +98,6 @@ def test_render_daily_usage_statistics_prints_no_events_message_when_empty() -> 
     """Empty report should print a no-events message instead of tables."""
     report = DailyUsageStatistics(
         usage_by_model_day={},
-        daily_costs={},
         overall_usage={},
         total_events=0,
     )

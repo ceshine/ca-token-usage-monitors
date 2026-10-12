@@ -56,6 +56,5 @@ class DailyUsageStatistics:
     """Aggregated daily usage statistics and costs."""
 
     usage_by_model_day: dict[tuple[str, date], UsageStats]
-    daily_costs: dict[date, float]
     overall_usage: dict[str, UsageStats]
     total_events: int
