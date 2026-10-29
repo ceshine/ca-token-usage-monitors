@@ -24,7 +24,7 @@ Out of scope:
 Confirmed from local files at `~/.claude/projects/{project-hash}/{sessionId}.jsonl`:
 
 - **Entry types**: `file-history-snapshot`, `user`, `system`, `assistant`, `last-prompt`.
-- **Only `assistant` entries have token usage** in `message.usage`.
+- **Only `assistant` entries have token usage** in `message.usage`. Context compaction calls produce no `assistant` entry and are not tracked (see §4.6).
 - **Usage fields**: `input_tokens`, `output_tokens`, `cache_creation_input_tokens` (optional, default 0), `cache_read_input_tokens` (optional, default 0).
 - **`speed` field**: present on some entries, values observed: `null`, `"standard"` (handle `"fast"` when encountered).
 - **`costUSD`**: never present in current logs.
@@ -136,6 +136,29 @@ In-memory dedup during parsing:
 4. Duplicate with different tokens and `stop_reason == null`: skip silently (`duplicate_rows_skipped += 1`); a final entry is expected later.
 
 DB-level: `INSERT ... ON CONFLICT DO NOTHING` on `(session_id, message_id, request_id)`.
+
+### 4.6 Untracked usage: context compaction
+
+Context compaction usage is **not tracked**. The summarization API call is not logged as an `assistant` entry: no `message.usage`, `message.id`, or `requestId` is written for it. A compaction appears in the logs only as:
+
+1. A `system` entry with `subtype == "compact_boundary"` and a `compactMetadata` object (`trigger`, `preTokens`, `postTokens`, `durationMs`, ...).
+2. A `user` entry with `isCompactSummary: true` whose `message.content` holds the summary text.
+
+No `assistant` entry exists in the `durationMs` window before any observed boundary.
+
+`preTokens` and `postTokens` measure context size (before compaction, and of the full rebuilt context afterwards), not billed usage, so they cannot be used as token counts directly.
+
+Estimation was evaluated (2026-10-29) against the cumulative `modelUsage` totals in `cost-state` entries, compared within the same process window (from `cost-state.startTime`). The acceptance bar was closing at least 90% of the overall gap; no variant met it:
+
+| Variant | Result |
+|---|---|
+| Output = `postTokens` | Overall output gap closed ~100% only by coincidence; per-window ratios ranged 0.2×–3.5× |
+| Output = summary characters / 4, Claude Code ≥ 2.1.308 | Closed 59% of the output gap |
+| Output = summary characters / 4, Claude Code < 2.1.308 | Closed 12% of the output gap |
+| Input = `preTokens` as cache writes | Rejected: predicted 8.5M cache-write tokens against a 0.6M gap |
+| Input = `preTokens` as cache reads | Not verifiable: a separate cache-read gap (~17% of measured cache reads, also present in windows without compactions) is several times larger |
+
+Compaction usage is therefore left out rather than estimated. Totals for sessions with compactions are lower bounds.
 
 ## 5. Ingestion Workflow
 
