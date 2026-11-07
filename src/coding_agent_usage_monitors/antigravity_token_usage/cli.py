@@ -34,7 +34,7 @@ def main() -> None:
 
 @TYPER_APP.command("ingest")
 def ingest_command(
-    database_path: Path = typer.Option(  # noqa: B008
+    database_path: Path = typer.Option(
         DEFAULT_DATABASE_PATH,
         "--database-path",
         "-d",
@@ -59,7 +59,7 @@ def ingest_command(
 
 @TYPER_APP.command("stats")
 def stats_command(
-    database_path: Path = typer.Option(  # noqa: B008
+    database_path: Path = typer.Option(
         DEFAULT_DATABASE_PATH,
         "--database-path",
         "-d",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from dataclasses import dataclass
+from typing import Self
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,7 @@ class UsageStats:
             cost=self.cost + other.cost,
         )
 
-    def __iadd__(self, other: UsageStats) -> UsageStats:
+    def __iadd__(self, other: UsageStats) -> Self:
         """Mutate this object by adding stats in-place."""
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens

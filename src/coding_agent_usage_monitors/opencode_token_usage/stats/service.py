@@ -162,7 +162,7 @@ def _resolve_model_price_spec(provider_code: str, model_code: str, price_spec: d
 def _strip_free_suffixes(model_code: str) -> str:
     """Strip known free-tier suffixes from a model code."""
     stripped = model_code
-    while stripped.endswith(":free") or stripped.endswith("-free"):
+    while stripped.endswith((":free", "-free")):
         if stripped.endswith(":free"):
             stripped = stripped[: -len(":free")]
         elif stripped.endswith("-free"):

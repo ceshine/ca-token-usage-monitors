@@ -136,7 +136,7 @@ def extract_session_id(event: dict[str, Any]) -> str | None:
 def parse_iso_timestamp_to_date(timestamp_str: str) -> date | None:
     """Parses an ISO timestamp string into a date."""
     try:
-        return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00")).date()
+        return datetime.fromisoformat(timestamp_str).date()
     except ValueError:
         return None
 
