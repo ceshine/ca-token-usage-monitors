@@ -24,8 +24,8 @@ jobs:
 
       - name: Python lint (Ruff)
         run: |
-          uvx ruff check .
-          uvx ruff format --check .
+          uv run --frozen --only-group dev ruff check .
+          uv run --frozen --only-group dev ruff format --check .
 
       - name: Sync dependencies
         run: uv sync --frozen

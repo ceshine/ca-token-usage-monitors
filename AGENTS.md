@@ -105,13 +105,14 @@ This project uses `uv` for Python setup and dependency management.
 - **Sync Environment:** `uv sync --frozen` (creates/updates virtualenv from lockfile).
 - **Run Scripts/Tools:** Always prefix with `uv run` (e.g., `uv run python main.py`, `uv run pytest`).
 - **Add Dependencies:** Use `uv add <package>` or `uv add --dev <package>`.
-- **Linting & Formatting:**
-  - `uvx ruff check .` (Linting)
-  - `uvx ruff format --line-length 120` (Formatting)
+- **Linting & Formatting:** Use the `ruff` version pinned in `uv.lock` (from the `dev` dependency group), the same one CI runs:
+  - `uv run --frozen ruff check .` (Linting)
+  - `uv run --frozen ruff format .` (Formatting; line length comes from `[tool.ruff]` in `pyproject.toml`)
+  - Fallback: only if the locked `ruff` is not available locally (e.g., the `dev` group cannot be synced), use `uvx ruff check .` and `uvx ruff format .`. Note that `uvx` runs the latest `ruff` release, whose default rules may differ from the locked version CI uses.
 
 Pre-Submission Check:
 
-- Before submitting for review, always run `uvx ruff check .` and `uvx ruff format --line-length 120`.
+- Before submitting for review, always run the lint and format commands above (locked `ruff` first, `uvx ruff` as the fallback).
 - Ensure all tests pass with `uv run pytest`.
 
 Guidelines for commands and CI:
