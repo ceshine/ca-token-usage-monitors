@@ -45,7 +45,7 @@ class StatsService:
                     continue
 
                 events.append(event)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - best-effort aggregation; failure is logged and flagged
             encountered_errors = True
             LOGGER.error("Error while processing %s: %s", log_file_path, exc)
 

@@ -31,7 +31,7 @@ def test_parse_session_file_extracts_rows(tmp_path: Path) -> None:
         ],
     )
 
-    session_id, slug, cwd, version, agent_id = parse_session_identity(session_file)
+    session_id, _slug, _cwd, _version, _agent_id = parse_session_identity(session_file)
     parsed = parse_session_file(session_file, session_id, checkpoint=None)
 
     assert len(parsed.usage_rows) == 2

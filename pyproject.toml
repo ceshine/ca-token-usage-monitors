@@ -50,4 +50,10 @@ line-length = 120
 target-version = "py313"
 
 [tool.ruff.lint]
-ignore = ["I001"]
+# TRY004: malformed-data checks intentionally raise ValueError (callers and tests rely on it).
+# DTZ005: naive `datetime.now()` is used deliberately for local-time dates and archive names.
+ignore = ["I001", "TRY004", "DTZ005"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Typer declares CLI parameters through call expressions in argument defaults.
+extend-immutable-calls = ["typer.Option", "typer.Argument"]

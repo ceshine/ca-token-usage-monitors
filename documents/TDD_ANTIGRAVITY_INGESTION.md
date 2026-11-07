@@ -367,12 +367,7 @@ For each parsed usage event, calculate canonical token values as follows:
 total_output_tokens = max(raw.total_output_tokens, raw.visible_output_tokens + raw.reasoning_tokens)
 output_tokens = max(raw.visible_output_tokens, total_output_tokens - raw.reasoning_tokens)
 reasoning_tokens = max(raw.reasoning_tokens, total_output_tokens - output_tokens)
-total_tokens = (
-    input_tokens
-    + cache_creation_tokens
-    + cache_read_tokens
-    + total_output_tokens
-)
+total_tokens = input_tokens + cache_creation_tokens + cache_read_tokens + total_output_tokens
 ```
 
 All normalized counts must be non-negative.
