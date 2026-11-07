@@ -103,7 +103,7 @@ from . import runner
 This project uses `uv` for Python setup and dependency management.
 
 - **Sync Environment:** `uv sync --frozen` (creates/updates virtualenv from lockfile).
-- **Run Scripts/Tools:** Always prefix with `uv run` (e.g., `uv run python main.py`, `uv run pytest`).
+- **Run Scripts/Tools:** Always prefix runtime commands with `uv run` (e.g., `uv run python main.py`, `uv run pytest`).
 - **Add Dependencies:** Use `uv add <package>` or `uv add --dev <package>`.
 - **Linting & Formatting:** Use the `ruff` version pinned in `uv.lock` (from the `dev` dependency group), the same one CI runs:
   - `uv run --frozen ruff check .` (Linting)

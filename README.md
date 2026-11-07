@@ -41,6 +41,20 @@ uv sync --frozen
 
 ---
 
+## Release Notes
+
+### 0.4.0 (breaking)
+
+- **Requires DuckDB 2.0.** The `duckdb` dependency floor is raised from `1.4.4` to `2.0.0`.
+- **Database files are not backward compatible.** DuckDB 2.0 writes a new on-disk storage format when it creates a database file (e.g., when compacting with `scripts/compact_db.py`). Versions 0.3.x and earlier, which ship DuckDB 1.x, fail to open such files with `IO Error: Trying to read a database file with version number 999`.
+- **Upgrade every install that shares the database**, including copies installed via `uv tool install`:
+
+  ```bash
+  uv tool install --reinstall .
+  ```
+
+---
+
 ## Internal Workflows
 
 ### Pricing Data Collection
