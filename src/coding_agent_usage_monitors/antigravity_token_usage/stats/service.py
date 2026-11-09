@@ -14,9 +14,10 @@ from .schemas import UsageStats, TokenUsageEvent, DailyUsageStatistics
 from .repository import StatsRepository
 
 _GEMINI_EFFORT_MODEL_PATTERN = re.compile(
-    r"^(gemini-\d+\.\d+-(?:flash|pro))(?:-(?:thinking|high|medium|low|extra-low))$"
+    r"^(gemini-\d+(?:\.\d+)?-(?:flash|pro|argon))(?:-(?:thinking|high|medium|low|extra-low))$"
 )
 _CLAUDE_VERSION_FIRST_PATTERN = re.compile(r"^claude-(\d+(?:[.-]\d+)?)-(opus|sonnet|haiku)$")
+_CLAUDE_EFFORT_MODEL_PATTERN = re.compile(r"^(claude-(?:opus|sonnet|haiku)-\d+(?:-\d+)?)(?:-(?:low|medium|high|max))$")
 
 
 class StatsService:
@@ -120,7 +121,9 @@ def resolve_pricing_model_name(model_code: str) -> str | None:
             version = version_first_match.group(1).replace(".", "-")
             family = version_first_match.group(2)
             return f"anthropic/claude-{family}-{version}"
-        return f"anthropic/{model_code}"
+        effort_match = _CLAUDE_EFFORT_MODEL_PATTERN.fullmatch(model_code)
+        normalized_model = effort_match.group(1) if effort_match else model_code
+        return f"anthropic/{normalized_model}"
 
     return None
 
