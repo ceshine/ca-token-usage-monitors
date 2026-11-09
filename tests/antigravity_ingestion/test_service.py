@@ -45,23 +45,23 @@ def test_successful_ingestion_and_idempotency(tmp_path: Path) -> None:
     assert counters1.raw_events_extracted == 1
     assert counters1.canonical_events_written == 1
 
-    db_events1 = duck_conn.execute("SELECT event_key, model_code FROM antigravity_usage_events").fetchall()
+    db_events1 = duck_conn.execute("SELECT event_key, model_code, model_id FROM antigravity_usage_events").fetchall()
     assert len(db_events1) == 1
-    assert db_events1[0] == ("response:r1", "gemini-2.5-flash")
+    assert db_events1[0] == ("response:r1", "gemini-2.5-flash", 312)
 
     # Second run is idempotent
     counters2 = service.ingest(override_env={"ANTIGRAVITY_DATA_DIR": str(db_dir)})
     assert counters2.canonical_events_written == 1
 
-    db_events2 = duck_conn.execute("SELECT event_key, model_code FROM antigravity_usage_events").fetchall()
+    db_events2 = duck_conn.execute("SELECT event_key, model_code, model_id FROM antigravity_usage_events").fetchall()
     assert db_events2 == db_events1
 
 
-def test_no_discovered_databases_empties_table(tmp_path: Path) -> None:
-    """Verify run with zero discovered databases successfully empties canonical table."""
+def test_no_discovered_databases_preserves_existing_rows(tmp_path: Path) -> None:
+    """Verify run with zero discovered databases preserves pre-existing canonical rows."""
     duck_conn = duckdb.connect(":memory:")
     repo = IngestionRepository(duck_conn)
-    repo.replace_all_events(
+    repo.update_all_events(
         [
             UsageEventRow(
                 event_key="old_key",
@@ -69,6 +69,7 @@ def test_no_discovered_databases_empties_table(tmp_path: Path) -> None:
                 session_id="old",
                 event_timestamp=TS,
                 model_code="gemini-2.5-flash",
+                model_id=312,
                 provider_id=None,
                 input_tokens=10,
                 output_tokens=10,
@@ -93,7 +94,7 @@ def test_no_discovered_databases_empties_table(tmp_path: Path) -> None:
     assert counters.canonical_events_written == 0
 
     count = duck_conn.execute("SELECT COUNT(*) FROM antigravity_usage_events").fetchone()[0]
-    assert count == 0
+    assert count == 1
 
 
 def test_failed_database_preserves_prior_canonical_table(tmp_path: Path) -> None:
@@ -140,7 +141,7 @@ def test_failed_database_preserves_prior_canonical_table(tmp_path: Path) -> None
         provider_assigned_message_id=None,
         message_id=None,
     )
-    repo.replace_all_events([prior_row])
+    repo.update_all_events([prior_row])
 
     service = IngestionService(repo)
     counters = service.ingest(override_env={"ANTIGRAVITY_DATA_DIR": str(db_dir)})

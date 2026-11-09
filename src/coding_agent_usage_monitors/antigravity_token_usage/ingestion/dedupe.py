@@ -65,6 +65,14 @@ def merge_events(events: list[RawUsageEvent]) -> UsageEventRow:
     non_default_models = [e.model_code for e in events if e.model_code != "gemini-internal-model"]
     winning_model_code = non_default_models[0] if non_default_models else "gemini-internal-model"
 
+    non_default_model_ids = [
+        e.model_id for e in events if e.model_code != "gemini-internal-model" and e.model_id is not None
+    ]
+    if non_default_model_ids:
+        winning_model_id: int | None = non_default_model_ids[0]
+    else:
+        winning_model_id = next((e.model_id for e in events if e.model_id is not None), None)
+
     providers = [e.provider_id for e in events if e.provider_id is not None]
     winning_provider_id = providers[0] if providers else None
 
@@ -96,6 +104,7 @@ def merge_events(events: list[RawUsageEvent]) -> UsageEventRow:
         session_id=session_id,
         event_timestamp=winning_ts,
         model_code=winning_model_code,
+        model_id=winning_model_id,
         provider_id=winning_provider_id,
         input_tokens=inp,
         output_tokens=out,
