@@ -16,7 +16,7 @@ In scope:
 - Normalize model names, timestamps, and token counters.
 - Deduplicate usage events across rows, tables, and databases.
 - Persist the canonical event set into DuckDB.
-- Replace the complete canonical event set on each successful ingestion run.
+- Upsert the deduplicated canonical event set on each successful ingestion run while preserving historical events from removed source SQLite files.
 
 Out of scope:
 
@@ -36,14 +36,14 @@ Out of scope:
 5. If the same physical database is reachable through more than one root, the source label from the first matching root in discovery-priority order wins.
 6. Source database paths are transient implementation details. They are used for discovery, parsing, error messages, and fallback event-key creation, but are not stored in DuckDB.
 7. The ingestion run parses every currently discovered database. It then globally deduplicates all parsed events in memory.
-8. On a successful run, ingestion replaces the complete `antigravity_usage_events` contents in one DuckDB transaction. This favors correctness and a simple data model over incremental optimization.
+8. On a successful run, ingestion upserts the deduplicated canonical events into `antigravity_usage_events` in one DuckDB transaction (`update_all_events`). This preserves historical events when local source `.db` files are later cleaned up, while keeping existing conflicting `event_key` rows updated idempotently.
 9. No `antigravity_raw_usage_events` table is created. Existing provider ingestors persist usable canonical events directly and do not use raw-event staging tables.
 10. A duplicate event is identified by any documented non-empty identity key, in this preference order: response ID, provider-assigned message ID, then message ID.
 11. Events without any identity key are retained as distinct events. They cannot be safely cross-database deduplicated.
 12. When duplicates merge, every token counter takes the maximum observed value rather than being summed.
 13. Stored `discovery_source` for a merged event is selected by discovery priority: `default`, `cli`, `ide`, `backup`, `config`, then `env`.
 14. SQLite source files are always opened read-only.
-15. A malformed or unreadable database fails that database for the run but does not prevent processing other discovered databases. The DuckDB canonical event table is not replaced if any database fails.
+15. A malformed or unreadable database fails that database for the run but does not prevent processing other discovered databases. The DuckDB canonical event table is not updated (the upsert is aborted) if any database fails.
 16. Timestamp precedence follows the ccusage reference implementation: an explicit generator or step timestamp has rank `3`, a trajectory timestamp has rank `1`, and the source database modification time has rank `0`. Higher ranks win; equal ranks select the earlier timestamp.
 17. Retry usages follow ccusage behavior: parse every token-bearing retry as a candidate event, without inferring whether it represents a failed attempt. A retry sharing an identity with another event merges through normal identity-based deduplication; one with a distinct or absent identity remains a separate event.
 18. A deduplicated event stores exactly one `discovery_source`, selected by source priority. The initial implementation intentionally does not preserve every source location that contained a duplicate event.
@@ -51,9 +51,9 @@ Out of scope:
 20. A missing primary `ModelUsage` is valid when retry usages are present. Parse and emit every token-bearing retry normally, inheriting enclosing metadata and timestamp fallback context; do not reject or skip the metadata solely because its primary usage field is absent.
 21. `session_id` is required for every persisted event and is derived from the source database filename stem. Do not substitute an `unknown` value; a discovered database without a usable non-empty filename stem is a per-database ingestion failure.
 22. Model-string normalization follows ccusage's `normalize_antigravity_model` rules exactly. Do not introduce generic provider-prefix stripping, punctuation rewriting, or version-suffix removal beyond those explicit rules.
-23. Each source database is read through one explicit deferred read transaction with a bounded five-second SQLite busy timeout. The first schema read establishes a consistent SQLite snapshot for all table checks and source queries. A concurrent successful writer commit does not invalidate that snapshot; it is visible on a later ingestion run. SQLite busy, locked, I/O, or query failures remain per-database failures and prevent canonical-table replacement.
+23. Each source database is read through one explicit deferred read transaction with a bounded five-second SQLite busy timeout. The first schema read establishes a consistent SQLite snapshot for all table checks and source queries. A concurrent successful writer commit does not invalidate that snapshot; it is visible on a later ingestion run. SQLite busy, locked, I/O, or query failures remain per-database failures and abort the canonical-table upsert.
 
-Decision 15 ensures that a partial discovery/parsing failure never silently replaces a previously complete canonical data set with incomplete results.
+Decision 15 ensures that a partial discovery/parsing failure never writes incomplete results to the canonical data set.
 
 ## 3. Package Layout
 
@@ -82,7 +82,7 @@ Responsibilities:
 - `protobuf.py`: defensive low-level protobuf wire-format reader.
 - `parser.py`: read-only SQLite querying and AntiGravity-specific blob extraction.
 - `dedupe.py`: event identities, connected-duplicate merging, and canonical-source selection.
-- `repository.py`: DuckDB schema creation and transactional full replacement.
+- `repository.py`: DuckDB schema creation and transactional upsert (`update_all_events`).
 - `service.py`: discovery, parse orchestration, error accumulation, deduplication, and persistence.
 - `errors.py`: contextual exceptions for discovery, SQLite/schema, and protobuf parsing failures.
 
@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS antigravity_usage_events (
     session_id VARCHAR NOT NULL,
     event_timestamp TIMESTAMPTZ,
     model_code VARCHAR NOT NULL,
+    model_id BIGINT,
     provider_id BIGINT,
     input_tokens BIGINT NOT NULL,
     output_tokens BIGINT NOT NULL,
@@ -168,6 +169,7 @@ Notes:
 - `event_key` is deterministic for events having an identity: it uses the highest-preference identity key available (`response:`, then `provider:`, then `message:`).
 - An event without any identity receives an internal fallback key derived from the canonical source path, source table, source row index, and repeated-usage ordinal. The path itself is not stored.
 - `session_id` is required and is always the source database filename stem; a source database with no usable non-empty stem fails ingestion rather than storing a synthetic identifier.
+- `model_id` stores the raw numeric AntiGravity model ID alongside the normalized `model_code` so future model mapping updates can re-resolve model codes without needing original SQLite files on disk.
 - `discovery_source` is the single selected source for a canonical event. It does not attempt to represent every source location that contained a duplicate copy.
 - No source-database table and no source-path field are persisted. A future provenance requirement would warrant a separate event-source relation rather than adding a comma-separated path/source field.
 
@@ -382,7 +384,15 @@ Resolve the model for each candidate event in this order, matching ccusage:
 4. The inherited generation model, when applicable.
 5. `gemini-internal-model` when no preceding source resolves a model.
 
-For generator context, the inherited generation model is established from the row's raw name, then its metadata model ID, then its primary usage model ID, and then the last previously resolved generation model. For step context, it is established from the step raw name, then its metadata model ID, then the latest resolvable model from the generation rows. Thus, an individual retry or primary usage with its own numeric model ID overrides a raw model name inherited from its enclosing generator or step metadata. Numeric IDs resolve through this mapping:
+For generator context, the inherited generation model is established from the row's raw name, then its metadata model ID, then its primary usage model ID, and then the last previously resolved generation model. For step context, it is established from the step raw name, then its metadata model ID, then the latest resolvable model from the generation rows. Thus, an individual retry or primary usage with its own numeric model ID overrides a raw model name inherited from its enclosing generator or step metadata.
+
+Alongside `model_code`, extract and persist the raw numeric `model_id` (`resolve_raw_model_id`) for each candidate event by selecting the first non-zero numeric ID in precedence order:
+1. The candidate `ModelUsage.field 1` numeric model ID (`usage_model_id`).
+2. The enclosing metadata numeric model ID (`meta_model_id`).
+3. The inherited generation numeric model ID (`inherited_model_id`).
+4. `None` when no numeric model ID is present.
+
+Numeric IDs resolve through this mapping:
 
 | Model ID | Canonical name |
 | --- | --- |
@@ -562,23 +572,23 @@ When merging duplicate events:
 - Take the maximum for `input_tokens`, `output_tokens`, `cache_creation_tokens`, `cache_read_tokens`, `reasoning_tokens`, and `total_output_tokens`.
 - Recompute `total_tokens` from the resulting component values.
 - Prefer a non-default model code over `gemini-internal-model`.
+- Select `model_id` from candidate events with a non-default `model_code` (`model_code != 'gemini-internal-model'`), falling back to the first non-`None` `model_id`.
 - Prefer an explicit provider ID to a missing provider ID.
 - Union all identity keys.
 - Select message IDs by identity preference: response ID, provider-assigned message ID, then message ID.
 - Select `discovery_source` by the priority in Section 2.
 - Select timestamps using the rank and equal-rank tie-breaker in Section 8.5.
 
-### 10.4 Full replacement transaction
+### 10.4 Upsert transaction
 
-The repository performs a full replacement only when parsing every discovered database succeeds:
+The repository performs a transactional upsert (`update_all_events`) only when parsing every discovered database succeeds:
 
-1. Ensure `antigravity_usage_events` exists.
+1. Ensure `antigravity_usage_events` exists and includes `model_id BIGINT` (`ALTER TABLE antigravity_usage_events ADD COLUMN IF NOT EXISTS model_id BIGINT`).
 2. Begin a transaction.
-3. Delete existing rows from `antigravity_usage_events`.
-4. Insert all globally deduplicated canonical rows using `executemany`.
-5. Commit the transaction.
+3. Upsert all globally deduplicated canonical rows using `executemany` with `INSERT INTO antigravity_usage_events (...) VALUES (...) ON CONFLICT (event_key) DO UPDATE SET ...`, preserving existing non-null `model_id` values via `COALESCE(EXCLUDED.model_id, antigravity_usage_events.model_id)`.
+4. Commit the transaction.
 
-If discovery produces zero databases, the successful result is an empty canonical table. If any database fails to parse, do not begin the replacement transaction; return failure counters and leave the prior table unchanged.
+If discovery produces zero databases, existing rows in `antigravity_usage_events` are preserved intact. If any database fails to parse, do not begin the upsert transaction; return failure counters and leave the prior table unchanged.
 
 ## 11. Open Questions
 
@@ -604,7 +614,7 @@ Failures must include the canonical source path and enough context to diagnose t
 - Blob decode errors: source path, table, row index, protobuf field path, and byte offset when available.
 - Invalid timestamps or token values: source path, table, row index, and affected field.
 
-The service may log per-database failures and continue parsing other databases. It must not replace the existing DuckDB canonical table when `databases_failed > 0`.
+The service may log per-database failures and continue parsing other databases. It must not update the existing DuckDB canonical table when `databases_failed > 0`.
 
 ## 13. Test Plan
 
@@ -640,8 +650,8 @@ Build temporary SQLite databases in test fixtures using encoded wire-format blob
 
 - Parse a minimum valid `gen_metadata` row.
 - Derive and persist `session_id` from the database filename stem.
-- Reject a database with no usable non-empty filename stem without replacing the existing canonical event set.
-- Parse model string and numeric-model fallback.
+- Reject a database with no usable non-empty filename stem without modifying the existing canonical event set.
+- Parse model string, numeric-model fallback, and raw `model_id` extraction/inheritance.
 - Parse a primary usage plus repeated retry usages.
 - Parse and emit token-bearing retry usages when the enclosing generator or step metadata lacks a primary `ModelUsage`.
 - Skip a primary or retry usage only when all token counters are zero.
@@ -685,8 +695,8 @@ Build temporary SQLite databases in test fixtures using encoded wire-format blob
 
 ### 13.6 Service/repository tests
 
-- A successful run replaces stale event rows with the current complete canonical set.
-- A run with no discovered databases successfully empties the event table.
+- A successful run upserts canonical event rows while preserving historical rows whose `event_key` is not in the current batch.
+- A run with no discovered databases preserves existing rows in the event table.
 - A run where any database fails preserves the prior event table unchanged.
 - Counters and failed-path output correctly distinguish successful and failed databases.
 - Repeated successful runs are idempotent.
