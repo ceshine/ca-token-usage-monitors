@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
+import shutil
 import logging
 from pathlib import Path
+from datetime import datetime
 from collections import Counter
 from dataclasses import dataclass
 
@@ -23,11 +25,49 @@ from coding_agent_usage_monitors.antigravity_token_usage.ingestion.parser import
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_DATABASE_PATH = get_default_database_path()
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_CACHE_DIR = PROJECT_ROOT / "cache"
 
 PLACEHOLDER_M_REGEX: re.Pattern[str] = re.compile(r"^model_placeholder_m(\d+)$", re.IGNORECASE)
 LEGACY_MODEL_REGEX: re.Pattern[str] = re.compile(r"^antigravity-model-(\d+)$", re.IGNORECASE)
 
 TYPER_APP = typer.Typer(help="Backfill raw model_id and re-normalize model_code for AntiGravity usage events.")
+
+
+def backup_database(
+    database_path: Path,
+    backup_dir: Path = DEFAULT_CACHE_DIR,
+    now: datetime | None = None,
+) -> Path:
+    """Create a timestamped backup of the database in cache/<db_name>.YYMMDD-HHmm.duckdb.
+
+    Args:
+        database_path (Path): Path to the DuckDB database to back up.
+        backup_dir (Path, optional): Directory to store the backup file. Defaults to DEFAULT_CACHE_DIR.
+        now (datetime | None, optional): Datetime instance to use for timestamping.
+            Defaults to None (uses datetime.now()).
+
+    Returns:
+        Path: Path to the newly created backup database file.
+
+    Raises:
+        FileNotFoundError: If the source database file does not exist.
+    """
+    if not database_path.exists():
+        raise FileNotFoundError(f"Database file not found: {database_path}")
+
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    current_time = now if now is not None else datetime.now()
+    timestamp = current_time.strftime("%y%m%d-%H%M")
+    backup_path = backup_dir / f"{database_path.stem}.{timestamp}.duckdb"
+
+    shutil.copy2(database_path, backup_path)
+    wal_source = database_path.parent / f"{database_path.name}.wal"
+    if wal_source.exists():
+        shutil.copy2(wal_source, backup_dir / f"{backup_path.name}.wal")
+
+    LOGGER.info("Created database backup at %s", backup_path)
+    return backup_path
 
 
 @dataclass(frozen=True)
@@ -235,6 +275,12 @@ def main(
         "--dry-run",
         help="Compute and display changes without committing them to DuckDB.",
     ),
+    backup_dir: Path = typer.Option(
+        DEFAULT_CACHE_DIR,
+        "--backup-dir",
+        "-b",
+        help="Directory to store the database backup file before backfilling.",
+    ),
 ) -> None:
     """Backfill raw model_id and re-normalize placeholder model_code values in DuckDB."""
     logging.basicConfig(
@@ -244,6 +290,10 @@ def main(
     if not database_path.exists():
         raise typer.BadParameter(f"Database file not found: {database_path}")
 
+    console = Console()
+    backup_path = backup_database(database_path=database_path, backup_dir=backup_dir)
+    console.print(f"[bold green]Database backup created:[/bold green] {backup_path}")
+
     LOGGER.info("Opening DuckDB database at %s (dry_run=%s)", database_path, dry_run)
     connection = duckdb.connect(str(database_path))
     try:
@@ -251,7 +301,7 @@ def main(
     finally:
         connection.close()
 
-    render_backfill_summary(stats=stats, console=Console())
+    render_backfill_summary(stats=stats, console=console)
 
 
 if __name__ == "__main__":
