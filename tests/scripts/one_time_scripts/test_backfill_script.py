@@ -178,3 +178,65 @@ INSERT INTO antigravity_usage_events (
     rows = verify_conn.execute("SELECT event_key, model_code, model_id FROM antigravity_usage_events").fetchall()
     verify_conn.close()
     assert rows == [("ev1", "gemini-4-argon-medium", 1418)]
+
+
+def test_main_cli_execution_dry_run_skips_backup(tmp_path: Path) -> None:
+    """Verify TYPER_APP CLI skips backup creation and rolls back changes when --dry-run is enabled."""
+    db_file = tmp_path / "dry_run_usage.duckdb"
+    conn = duckdb.connect(str(db_file))
+    conn.execute(
+        """
+CREATE TABLE antigravity_usage_events (
+    event_key VARCHAR PRIMARY KEY,
+    discovery_source VARCHAR NOT NULL,
+    session_id VARCHAR NOT NULL,
+    event_timestamp TIMESTAMPTZ,
+    model_code VARCHAR NOT NULL,
+    provider_id BIGINT,
+    input_tokens BIGINT NOT NULL,
+    output_tokens BIGINT NOT NULL,
+    reasoning_tokens BIGINT NOT NULL,
+    total_output_tokens BIGINT NOT NULL,
+    cache_creation_tokens BIGINT NOT NULL,
+    cache_read_tokens BIGINT NOT NULL,
+    total_tokens BIGINT NOT NULL,
+    response_id VARCHAR,
+    provider_assigned_message_id VARCHAR,
+    message_id VARCHAR,
+    ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO antigravity_usage_events (
+    event_key, discovery_source, session_id, event_timestamp, model_code, provider_id,
+    input_tokens, output_tokens, reasoning_tokens, total_output_tokens,
+    cache_creation_tokens, cache_read_tokens, total_tokens
+) VALUES
+    ('ev1', 'cli', 's1', '2026-11-01T00:00:00Z', 'model_placeholder_m418', 24, 10, 5, 0, 5, 0, 0, 15);
+        """
+    )
+    conn.close()
+
+    backup_dir = tmp_path / "cache"
+    runner = CliRunner()
+    result = runner.invoke(
+        TYPER_APP,
+        [
+            "--database-path",
+            str(db_file),
+            "--dry-run",
+            "--backup-dir",
+            str(backup_dir),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Dry run active: skipping database backup creation." in result.stdout
+    assert "Database backup created:" not in result.stdout
+
+    # Check no backup was created
+    backups = list(backup_dir.glob("*.duckdb"))
+    assert len(backups) == 0
+
+    # Check db was not committed (rolled back)
+    verify_conn = duckdb.connect(str(db_file))
+    rows = verify_conn.execute("SELECT event_key, model_code FROM antigravity_usage_events").fetchall()
+    verify_conn.close()
+    assert rows == [("ev1", "model_placeholder_m418")]

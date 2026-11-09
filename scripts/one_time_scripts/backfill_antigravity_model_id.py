@@ -291,8 +291,11 @@ def main(
         raise typer.BadParameter(f"Database file not found: {database_path}")
 
     console = Console()
-    backup_path = backup_database(database_path=database_path, backup_dir=backup_dir)
-    console.print(f"[bold green]Database backup created:[/bold green] {backup_path}")
+    if not dry_run:
+        backup_path = backup_database(database_path=database_path, backup_dir=backup_dir)
+        console.print(f"[bold green]Database backup created:[/bold green] {backup_path}")
+    else:
+        console.print("[yellow]Dry run active: skipping database backup creation.[/yellow]")
 
     LOGGER.info("Opening DuckDB database at %s (dry_run=%s)", database_path, dry_run)
     connection = duckdb.connect(str(database_path))
