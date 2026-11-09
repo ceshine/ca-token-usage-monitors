@@ -179,7 +179,7 @@ wheels = [
 
 [[package]]
 name = "coding-agent-token-monitors"
-version = "0.3.2"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "duckdb" },
@@ -201,7 +201,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "duckdb", specifier = ">=1.4.4" },
+    { name = "duckdb", specifier = ">=2.0.0" },
     { name = "orjson", specifier = ">=3.11.7" },
     { name = "orjsonl", specifier = ">=1.0.0" },
     { name = "requests", specifier = ">=2.33.1" },
