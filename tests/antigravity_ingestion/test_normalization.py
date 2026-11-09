@@ -63,10 +63,17 @@ def test_candidate_usage_model_id_overrides_raw_name() -> None:
 
 
 def test_parenthesized_effort_aliases() -> None:
-    """Verify parenthesized effort aliases for gemini 3.6/3.7/3.8 and high/medium/low."""
+    """Verify parenthesized effort aliases for Gemini Flash/Argon and Claude 5.5."""
     assert normalize_antigravity_model("gemini 3.6 flash (high)") == "gemini-3.6-flash-high"
     assert normalize_antigravity_model("Gemini 3.7 Flash (Medium)") == "gemini-3.7-flash-medium"
     assert normalize_antigravity_model("GEMINI 3.8 FLASH (LOW)") == "gemini-3.8-flash-low"
+    assert normalize_antigravity_model("Gemini 4 Argon (High)") == "gemini-4-argon-high"
+    assert normalize_antigravity_model("Gemini 4 Argon (Medium)") == "gemini-4-argon-medium"
+    assert normalize_antigravity_model("Gemini 4 Argon (Low)") == "gemini-4-argon-low"
+    assert normalize_antigravity_model("Claude Opus 5.5 (Low)") == "claude-opus-5-5-low"
+    assert normalize_antigravity_model("Claude Opus 5.5 (Max)") == "claude-opus-5-5-max"
+    assert normalize_antigravity_model("Claude Sonnet 5.5 (Medium)") == "claude-sonnet-5-5-medium"
+    assert normalize_antigravity_model("Claude Sonnet 5.5 (High)") == "claude-sonnet-5-5-high"
 
 
 def test_base_aliases_coverage() -> None:

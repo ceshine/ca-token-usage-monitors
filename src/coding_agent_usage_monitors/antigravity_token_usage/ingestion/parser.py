@@ -34,18 +34,54 @@ NUMERIC_MODEL_MAP: dict[int, str] = {
     340: "claude-4.5-haiku",
     341: "claude-4.5-haiku",
     342: "gpt-oss-120b-medium",
+    1009: "gemini-3-pro-image",
+    1011: "claude-opus-4-5",
+    1012: "claude-opus-4-5",
+    1018: "gemini-3-flash-preview",
+    1020: "gemini-3.5-flash-medium",
+    1021: "gemini-3.1-flash-image",
+    1026: "claude-opus-4-6",
+    1035: "claude-sonnet-4-6",
+    1036: "gemini-3.1-pro",
+    1037: "gemini-3.1-pro",
+    1050: "gemini-3.1-flash-lite-preview",
+    1059: "gemini-for-google-3.1-flash",
     1071: "gemini-3.6-flash-high",
     1072: "gemini-3.6-flash-medium",
     1073: "gemini-3.6-flash-low",
+    1149: "gemini-3.5-flash",
+    1187: "gemini-3.5-flash-extra-low",
+    1188: "ark-v4xs",
+    1196: "gemini-3.6-flash",
+    1250: "glm-5.2-fp8",
+    1251: "gemini-3.6-flash-high",
+    1252: "gemini-3.6-flash-medium",
+    1253: "gemini-3.6-flash-low",
+    1254: "claude-opus-4-8",
     1298: "gemini-3.7-flash-high",
     1299: "gemini-3.7-flash-medium",
     1300: "gemini-3.7-flash-low",
     1318: "gemini-3.8-flash-high",
     1319: "gemini-3.8-flash-medium",
     1320: "gemini-3.8-flash-low",
+    1368: "claude-opus-5-5",
+    1377: "claude-sonnet-5-5",
+    1400: "claude-opus-5-5-low",
+    1401: "claude-opus-5-5-medium",
+    1402: "claude-opus-5-5-high",
+    1403: "claude-sonnet-5-5-low",
+    1404: "claude-sonnet-5-5-medium",
+    1405: "claude-sonnet-5-5-high",
+    1406: "claude-opus-5-5-max",
+    1407: "claude-sonnet-5-5-max",
+    1417: "gemini-4-argon-high",
+    1418: "gemini-4-argon-medium",
+    1419: "gemini-4-argon-low",
 }
 
 BASE_ALIASES: dict[str, str] = {
+    "gemini 4 argon": "gemini-4-argon",
+    "gemini 4 argon thinking": "gemini-4-argon",
     "gemini 3.8 flash": "gemini-3.8-flash",
     "gemini 3.8 flash thinking": "gemini-3.8-flash",
     "gemini 3.7 flash": "gemini-3.7-flash",
@@ -53,10 +89,17 @@ BASE_ALIASES: dict[str, str] = {
     "gemini 3.7 pro": "gemini-3.7-pro",
     "gemini 3.7 pro thinking": "gemini-3.7-pro",
     "gemini 3.6 flash": "gemini-3.6-flash",
+    "gemini 3.5 flash": "gemini-3.5-flash",
+    "gemini 3.1 flash lite": "gemini-3.1-flash-lite-preview",
+    "gemini-3.1-flash-lite": "gemini-3.1-flash-lite-preview",
+    "gemini 3.1 flash image": "gemini-3.1-flash-image",
+    "gemini-3.1-flash-image-preview": "gemini-3.1-flash-image",
+    "gemini for google 3.1 flash": "gemini-for-google-3.1-flash",
     "gemini 3 flash": "gemini-3.6-flash",
     "gemini 3.6 pro": "gemini-3.6-pro",
     "gemini 3 pro": "gemini-3-pro",
     "gemini 3 pro thinking": "gemini-3-pro",
+    "gemini 3 pro image": "gemini-3-pro-image",
     "gemini 2.5 flash": "gemini-2.5-flash",
     "gemini 2.5 pro": "gemini-2.5-pro",
     "gemini 2.0 flash": "gemini-2.0-flash",
@@ -64,21 +107,48 @@ BASE_ALIASES: dict[str, str] = {
     "gemini 2.0 pro": "gemini-2.0-pro",
     "gemini 1.5 flash": "gemini-1.5-flash",
     "gemini 1.5 pro": "gemini-1.5-pro",
+    "model_placeholder_m417": "gemini-4-argon-high",
+    "model_placeholder_m418": "gemini-4-argon-medium",
+    "model_placeholder_m419": "gemini-4-argon-low",
+    "model_placeholder_m400": "claude-opus-5-5-low",
+    "model_placeholder_m401": "claude-opus-5-5-medium",
+    "model_placeholder_m402": "claude-opus-5-5-high",
+    "model_placeholder_m403": "claude-sonnet-5-5-low",
+    "model_placeholder_m404": "claude-sonnet-5-5-medium",
+    "model_placeholder_m405": "claude-sonnet-5-5-high",
+    "model_placeholder_m406": "claude-opus-5-5-max",
+    "model_placeholder_m407": "claude-sonnet-5-5-max",
+    "model_placeholder_m368": "claude-opus-5-5",
+    "model_placeholder_m377": "claude-sonnet-5-5",
     "model_placeholder_m318": "gemini-3.8-flash-high",
     "model_placeholder_m319": "gemini-3.8-flash-medium",
     "model_placeholder_m320": "gemini-3.8-flash-low",
     "model_placeholder_m298": "gemini-3.7-flash-high",
     "model_placeholder_m299": "gemini-3.7-flash-medium",
     "model_placeholder_m300": "gemini-3.7-flash-low",
+    "model_placeholder_m254": "claude-opus-4-8",
+    "model_placeholder_m251": "gemini-3.6-flash-high",
+    "model_placeholder_m252": "gemini-3.6-flash-medium",
+    "model_placeholder_m253": "gemini-3.6-flash-low",
+    "model_placeholder_m250": "glm-5.2-fp8",
+    "model_placeholder_m196": "gemini-3.6-flash",
+    "model_placeholder_m188": "ark-v4xs",
+    "model_placeholder_m149": "gemini-3.5-flash",
     "model_placeholder_m71": "gemini-3.6-flash-high",
     "model_placeholder_m72": "gemini-3.6-flash-medium",
     "model_placeholder_m73": "gemini-3.6-flash-low",
+    "model_placeholder_m59": "gemini-for-google-3.1-flash",
+    "model_placeholder_m50": "gemini-3.1-flash-lite-preview",
     "model_placeholder_m26": "claude-opus-4-6",
     "model_placeholder_m35": "claude-sonnet-4-6",
     "model_placeholder_m36": "gemini-3.1-pro",
     "model_placeholder_m37": "gemini-3.1-pro",
+    "model_placeholder_m21": "gemini-3.1-flash-image",
     "model_placeholder_m16": "gemini-3.1-pro",
     "model_placeholder_m18": "gemini-3-flash-preview",
+    "model_placeholder_m11": "claude-opus-4-5",
+    "model_placeholder_m12": "claude-opus-4-5",
+    "model_placeholder_m9": "gemini-3-pro-image",
     "model_placeholder_m84": "gemini-3-flash-preview",
     "model_placeholder_m47": "gemini-3-flash-preview",
     "model_placeholder_m132": "gemini-3.5-flash-high",
@@ -100,6 +170,12 @@ BASE_ALIASES: dict[str, str] = {
     "gemini-3.1-pro-low": "gemini-3.1-pro",
     "gemini-3-pro-high": "gemini-3-pro",
     "gemini-3-pro-low": "gemini-3-pro",
+    "claude-opus-4-5@20251101": "claude-opus-4-5",
+    "claude-opus-4-6@default": "claude-opus-4-6",
+    "claude-sonnet-4-6@default": "claude-sonnet-4-6",
+    "claude-opus-4-8@default": "claude-opus-4-8",
+    "claude-opus-5-5@default": "claude-opus-5-5",
+    "claude-sonnet-5-5@default": "claude-sonnet-5-5",
     "claude 3.7 sonnet": "claude-3-7-sonnet",
     "claude 3.7 sonnet thinking": "claude-3-7-sonnet",
     "claude 3.5 sonnet": "claude-3-5-sonnet",
@@ -107,7 +183,14 @@ BASE_ALIASES: dict[str, str] = {
     "claude 3 opus": "claude-3-opus",
 }
 
-EFFORT_REGEX: re.Pattern[str] = re.compile(r"^gemini\s+([3-9]\.[0-9]+)\s+flash\s*\((high|medium|low)\)$", re.IGNORECASE)
+EFFORT_REGEX: re.Pattern[str] = re.compile(
+    r"^gemini\s+([3-9](?:\.[0-9]+)?)\s+(flash|argon)\s*\((high|medium|low)\)$",
+    re.IGNORECASE,
+)
+CLAUDE_EFFORT_REGEX: re.Pattern[str] = re.compile(
+    r"^claude\s+(opus|sonnet)\s+([0-9]+\.[0-9]+)\s*\((low|medium|high|max)\)$",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -151,8 +234,17 @@ def normalize_antigravity_model(model_name: str | None) -> str | None:
 
     match = EFFORT_REGEX.match(trimmed)
     if match:
-        version, effort = match.group(1), match.group(2).lower()
-        return f"gemini-{version}-flash-{effort}"
+        version, variant, effort = match.group(1), match.group(2).lower(), match.group(3).lower()
+        return f"gemini-{version}-{variant}-{effort}"
+
+    claude_match = CLAUDE_EFFORT_REGEX.match(trimmed)
+    if claude_match:
+        family, version, effort = (
+            claude_match.group(1).lower(),
+            claude_match.group(2).replace(".", "-"),
+            claude_match.group(3).lower(),
+        )
+        return f"claude-{family}-{version}-{effort}"
 
     base = trimmed.split("(")[0].strip()
     base_lower = base.lower()

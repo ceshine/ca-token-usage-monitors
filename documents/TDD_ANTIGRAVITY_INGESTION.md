@@ -1,7 +1,7 @@
 # Token Ingestion Technical Design (AntiGravity SQLite -> DuckDB)
 
 Created: 2026-06-23
-Status: Proposed
+Status: Implemented
 
 ## 1. Scope
 
@@ -395,60 +395,119 @@ For generator context, the inherited generation model is established from the ro
 | `333`, `334` | `claude-4.5-sonnet` |
 | `340`, `341` | `claude-4.5-haiku` |
 | `342` | `gpt-oss-120b-medium` |
-| `1071` | `gemini-3.6-flash-high` |
-| `1072` | `gemini-3.6-flash-medium` |
-| `1073` | `gemini-3.6-flash-low` |
+| `1009` | `gemini-3-pro-image` |
+| `1011`, `1012` | `claude-opus-4-5` |
+| `1018` | `gemini-3-flash-preview` |
+| `1020` | `gemini-3.5-flash-medium` |
+| `1021` | `gemini-3.1-flash-image` |
+| `1026` | `claude-opus-4-6` |
+| `1035` | `claude-sonnet-4-6` |
+| `1036`, `1037` | `gemini-3.1-pro` |
+| `1050` | `gemini-3.1-flash-lite-preview` |
+| `1059` | `gemini-for-google-3.1-flash` |
+| `1071`, `1251` | `gemini-3.6-flash-high` |
+| `1072`, `1252` | `gemini-3.6-flash-medium` |
+| `1073`, `1253` | `gemini-3.6-flash-low` |
+| `1149` | `gemini-3.5-flash` |
+| `1187` | `gemini-3.5-flash-extra-low` |
+| `1188` | `ark-v4xs` |
+| `1196` | `gemini-3.6-flash` |
+| `1250` | `glm-5.2-fp8` |
+| `1254` | `claude-opus-4-8` |
 | `1298` | `gemini-3.7-flash-high` |
 | `1299` | `gemini-3.7-flash-medium` |
 | `1300` | `gemini-3.7-flash-low` |
 | `1318` | `gemini-3.8-flash-high` |
 | `1319` | `gemini-3.8-flash-medium` |
 | `1320` | `gemini-3.8-flash-low` |
+| `1368` | `claude-opus-5-5` |
+| `1377` | `claude-sonnet-5-5` |
+| `1400` | `claude-opus-5-5-low` |
+| `1401` | `claude-opus-5-5-medium` |
+| `1402` | `claude-opus-5-5-high` |
+| `1403` | `claude-sonnet-5-5-low` |
+| `1404` | `claude-sonnet-5-5-medium` |
+| `1405` | `claude-sonnet-5-5-high` |
+| `1406` | `claude-opus-5-5-max` |
+| `1407` | `claude-sonnet-5-5-max` |
+| `1417` | `gemini-4-argon-high` |
+| `1418` | `gemini-4-argon-medium` |
+| `1419` | `gemini-4-argon-low` |
 | Unlisted ID below `1000` | `antigravity-model-{model_id}` |
 | `1000+` | `model_placeholder_m{model_id - 1000}` |
 
-Normalize a resolved model string exactly as ccusage does:
+Normalize a resolved model string as follows:
 
 1. Trim surrounding whitespace. An empty result is missing.
-2. Match the lowercased string against the explicit aliases below.
+2. Match the lowercased string against the parenthesized effort aliases below.
 3. If no parenthesized effort alias matched, discard the first `(` and everything after it, then trim the remaining base string and match it against the base aliases below.
 4. If still unmatched, replace ASCII spaces with hyphens. Return that converted value only when it begins with `gemini-`, `claude-`, or `gpt-`; otherwise preserve the trimmed original string, including its original case and punctuation.
 
-Parenthesized effort aliases are exact for every combination of version `3.6`, `3.7`, or `3.8` and effort `high`, `medium`, or `low`:
+Parenthesized effort aliases match Gemini (`flash` or `argon` with effort `high`, `medium`, or `low`) and Claude (`opus` or `sonnet` with dotted version and effort `low`, `medium`, `high`, or `max`):
 
 ```text
-gemini <version> flash (<effort>) -> gemini-<version>-flash-<effort>
+gemini <version> <flash|argon> (<high|medium|low>) -> gemini-<version>-<flash|argon>-<effort>
+claude <opus|sonnet> <major.minor> (<low|medium|high|max>) -> claude-<opus|sonnet>-<major-minor>-<effort>
 ```
 
 Base aliases are:
 
 | Raw lowercased base | Canonical model code |
 | --- | --- |
+| `gemini 4 argon`, `gemini 4 argon thinking` | `gemini-4-argon` |
 | `gemini 3.8 flash`, `gemini 3.8 flash thinking` | `gemini-3.8-flash` |
 | `gemini 3.7 flash`, `gemini 3.7 flash thinking` | `gemini-3.7-flash` |
 | `gemini 3.7 pro`, `gemini 3.7 pro thinking` | `gemini-3.7-pro` |
 | `gemini 3.6 flash`, `gemini 3 flash` | `gemini-3.6-flash` |
+| `gemini 3.5 flash` | `gemini-3.5-flash` |
+| `gemini 3.1 flash lite`, `gemini-3.1-flash-lite` | `gemini-3.1-flash-lite-preview` |
+| `gemini 3.1 flash image`, `gemini-3.1-flash-image-preview` | `gemini-3.1-flash-image` |
+| `gemini for google 3.1 flash` | `gemini-for-google-3.1-flash` |
 | `gemini 3.6 pro` | `gemini-3.6-pro` |
 | `gemini 3 pro`, `gemini 3 pro thinking` | `gemini-3-pro` |
+| `gemini 3 pro image` | `gemini-3-pro-image` |
 | `gemini 2.5 flash` | `gemini-2.5-flash` |
 | `gemini 2.5 pro` | `gemini-2.5-pro` |
 | `gemini 2.0 flash`, `gemini 2 flash` | `gemini-2.0-flash` |
 | `gemini 2.0 pro` | `gemini-2.0-pro` |
 | `gemini 1.5 flash` | `gemini-1.5-flash` |
 | `gemini 1.5 pro` | `gemini-1.5-pro` |
+| `model_placeholder_m417` | `gemini-4-argon-high` |
+| `model_placeholder_m418` | `gemini-4-argon-medium` |
+| `model_placeholder_m419` | `gemini-4-argon-low` |
+| `model_placeholder_m400` | `claude-opus-5-5-low` |
+| `model_placeholder_m401` | `claude-opus-5-5-medium` |
+| `model_placeholder_m402` | `claude-opus-5-5-high` |
+| `model_placeholder_m403` | `claude-sonnet-5-5-low` |
+| `model_placeholder_m404` | `claude-sonnet-5-5-medium` |
+| `model_placeholder_m405` | `claude-sonnet-5-5-high` |
+| `model_placeholder_m406` | `claude-opus-5-5-max` |
+| `model_placeholder_m407` | `claude-sonnet-5-5-max` |
+| `model_placeholder_m368` | `claude-opus-5-5` |
+| `model_placeholder_m377` | `claude-sonnet-5-5` |
 | `model_placeholder_m318` | `gemini-3.8-flash-high` |
 | `model_placeholder_m319` | `gemini-3.8-flash-medium` |
 | `model_placeholder_m320` | `gemini-3.8-flash-low` |
 | `model_placeholder_m298` | `gemini-3.7-flash-high` |
 | `model_placeholder_m299` | `gemini-3.7-flash-medium` |
 | `model_placeholder_m300` | `gemini-3.7-flash-low` |
-| `model_placeholder_m71` | `gemini-3.6-flash-high` |
-| `model_placeholder_m72` | `gemini-3.6-flash-medium` |
-| `model_placeholder_m73` | `gemini-3.6-flash-low` |
+| `model_placeholder_m254` | `claude-opus-4-8` |
+| `model_placeholder_m71`, `model_placeholder_m251` | `gemini-3.6-flash-high` |
+| `model_placeholder_m72`, `model_placeholder_m252` | `gemini-3.6-flash-medium` |
+| `model_placeholder_m73`, `model_placeholder_m253` | `gemini-3.6-flash-low` |
+| `model_placeholder_m250` | `glm-5.2-fp8` |
+| `model_placeholder_m196` | `gemini-3.6-flash` |
+| `model_placeholder_m188` | `ark-v4xs` |
+| `model_placeholder_m149` | `gemini-3.5-flash` |
+| `model_placeholder_m59` | `gemini-for-google-3.1-flash` |
+| `model_placeholder_m50` | `gemini-3.1-flash-lite-preview` |
 | `model_placeholder_m26` | `claude-opus-4-6` |
 | `model_placeholder_m35` | `claude-sonnet-4-6` |
 | `model_placeholder_m36`, `model_placeholder_m37`, `model_placeholder_m16` | `gemini-3.1-pro` |
+| `model_placeholder_m21` | `gemini-3.1-flash-image` |
 | `model_placeholder_m18`, `model_placeholder_m84`, `model_placeholder_m47` | `gemini-3-flash-preview` |
+| `model_placeholder_m11`, `model_placeholder_m12` | `claude-opus-4-5` |
+| `model_placeholder_m9` | `gemini-3-pro-image` |
 | `model_placeholder_m132`, `model_placeholder_m133` | `gemini-3.5-flash-high` |
 | `model_placeholder_m187` | `gemini-3.5-flash-extra-low` |
 | `model_placeholder_m20` | `gemini-3.5-flash-medium` |
@@ -459,6 +518,12 @@ Base aliases are:
 | `gemini-3.5-flash-low` | `gemini-3.5-flash-medium` |
 | `gemini-3.1-pro-high`, `gemini-3.1-pro-low` | `gemini-3.1-pro` |
 | `gemini-3-pro-high`, `gemini-3-pro-low` | `gemini-3-pro` |
+| `claude-opus-4-5@20251101` | `claude-opus-4-5` |
+| `claude-opus-4-6@default` | `claude-opus-4-6` |
+| `claude-sonnet-4-6@default` | `claude-sonnet-4-6` |
+| `claude-opus-4-8@default` | `claude-opus-4-8` |
+| `claude-opus-5-5@default` | `claude-opus-5-5` |
+| `claude-sonnet-5-5@default` | `claude-sonnet-5-5` |
 | `claude 3.7 sonnet`, `claude 3.7 sonnet thinking` | `claude-3-7-sonnet` |
 | `claude 3.5 sonnet` | `claude-3-5-sonnet` |
 | `claude 3.5 haiku` | `claude-3-5-haiku` |
