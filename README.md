@@ -43,6 +43,19 @@ uv sync --frozen
 
 ## Release Notes
 
+### 0.5.0 (breaking)
+
+- **AntiGravity Raw `model_id` Persistence & Upsert:**
+  - Persists the raw numeric `model_id` (`BIGINT`) alongside `model_code` in `antigravity_usage_events`.
+  - Replaces destructive full-table replacement during ingestion with transactional idempotent upsert (`INSERT ... ON CONFLICT (event_key) DO UPDATE`), ensuring historical events are preserved even if local SQLite session files are removed.
+- **Run the Backfill Migration Script:**
+  - After upgrading the tool, run the one-time backfill script to populate `model_id` and re-normalize placeholder `model_code` values on historical records:
+    ```bash
+    uv run python scripts/one_time_scripts/backfill_antigravity_model_id.py
+    ```
+  - A timestamped backup of the database is automatically created in `cache/<db_name>.YYMMDD-HHmm.duckdb` before applying updates.
+  - You can test beforehand without committing changes by adding the `--dry-run` flag.
+
 ### 0.4.0 (breaking)
 
 - **Requires DuckDB 2.0.** The `duckdb` dependency floor is raised from `1.4.4` to `2.0.0`.

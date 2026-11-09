@@ -34,7 +34,7 @@ class IngestionRepository:
             self._connection.close()
 
     def ensure_schema(self) -> None:
-        """Create the antigravity_usage_events table if missing."""
+        """Create the antigravity_usage_events table if missing and ensure schema migrations."""
         self._connection.execute(
             """
 CREATE TABLE IF NOT EXISTS antigravity_usage_events (
@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS antigravity_usage_events (
     session_id VARCHAR NOT NULL,
     event_timestamp TIMESTAMPTZ,
     model_code VARCHAR NOT NULL,
+    model_id BIGINT,
     provider_id BIGINT,
     input_tokens BIGINT NOT NULL,
     output_tokens BIGINT NOT NULL,
@@ -58,9 +59,10 @@ CREATE TABLE IF NOT EXISTS antigravity_usage_events (
 );
             """
         )
+        self._connection.execute("ALTER TABLE antigravity_usage_events ADD COLUMN IF NOT EXISTS model_id BIGINT;")
 
-    def replace_all_events(self, events: list[UsageEventRow]) -> None:
-        """Replace all canonical events in DuckDB in a single transaction.
+    def update_all_events(self, events: list[UsageEventRow]) -> None:
+        """Upsert canonical events into DuckDB in a single transaction.
 
         Args:
             events (list[UsageEventRow]): Deduplicated canonical events to persist.
@@ -68,7 +70,6 @@ CREATE TABLE IF NOT EXISTS antigravity_usage_events (
         self.ensure_schema()
         self._connection.execute("BEGIN TRANSACTION")
         try:
-            self._connection.execute("DELETE FROM antigravity_usage_events")
             if events:
                 self._connection.executemany(
                     """
@@ -78,6 +79,7 @@ INSERT INTO antigravity_usage_events (
     session_id,
     event_timestamp,
     model_code,
+    model_id,
     provider_id,
     input_tokens,
     output_tokens,
@@ -89,7 +91,25 @@ INSERT INTO antigravity_usage_events (
     response_id,
     provider_assigned_message_id,
     message_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (event_key) DO UPDATE SET
+    discovery_source = EXCLUDED.discovery_source,
+    session_id = EXCLUDED.session_id,
+    event_timestamp = EXCLUDED.event_timestamp,
+    model_code = EXCLUDED.model_code,
+    model_id = COALESCE(EXCLUDED.model_id, antigravity_usage_events.model_id),
+    provider_id = EXCLUDED.provider_id,
+    input_tokens = EXCLUDED.input_tokens,
+    output_tokens = EXCLUDED.output_tokens,
+    reasoning_tokens = EXCLUDED.reasoning_tokens,
+    total_output_tokens = EXCLUDED.total_output_tokens,
+    cache_creation_tokens = EXCLUDED.cache_creation_tokens,
+    cache_read_tokens = EXCLUDED.cache_read_tokens,
+    total_tokens = EXCLUDED.total_tokens,
+    response_id = EXCLUDED.response_id,
+    provider_assigned_message_id = EXCLUDED.provider_assigned_message_id,
+    message_id = EXCLUDED.message_id,
+    ingested_at = NOW();
                     """,
                     [
                         [
@@ -98,6 +118,7 @@ INSERT INTO antigravity_usage_events (
                             e.session_id,
                             e.event_timestamp,
                             e.model_code,
+                            e.model_id,
                             e.provider_id,
                             e.input_tokens,
                             e.output_tokens,

@@ -12,7 +12,10 @@ from coding_agent_usage_monitors.antigravity_token_usage.ingestion.errors import
     InvalidDataError,
     SQLiteSchemaError,
 )
-from coding_agent_usage_monitors.antigravity_token_usage.ingestion.parser import parse_database
+from coding_agent_usage_monitors.antigravity_token_usage.ingestion.parser import (
+    parse_database,
+    resolve_raw_model_id,
+)
 from coding_agent_usage_monitors.antigravity_token_usage.ingestion.schemas import DiscoveredDatabase
 
 
@@ -121,6 +124,7 @@ def test_parse_minimum_valid_gen_metadata_and_session_id(tmp_path: Path) -> None
     event = result.events[0]
     assert event.session_id == "test_session_123"
     assert event.model_code == "gemini-2.5-flash"
+    assert event.model_id == 312
     assert event.input_tokens == 100
     assert event.output_tokens == 50
     assert event.event_timestamp == datetime.fromtimestamp(1700000000, tz=UTC)
@@ -180,6 +184,7 @@ def test_parse_primary_and_retry_usages_and_zero_tokens_skipping(tmp_path: Path)
     assert len(result.events) == 1
     assert result.events[0].input_tokens == 10
     assert result.events[0].output_tokens == 5
+    assert result.events[0].model_id == 312
     assert "retry_0" in result.events[0].fallback_key
 
 
@@ -208,6 +213,7 @@ def test_parse_optional_steps_table(tmp_path: Path) -> None:
 
     assert len(result.events) == 1
     assert result.events[0].input_tokens == 40
+    assert result.events[0].model_id == 312
     assert result.events[0].event_timestamp == datetime.fromtimestamp(1710000000, tz=UTC)
     assert result.missing_optional_tables == 1  # trajectory missing
 
@@ -270,3 +276,40 @@ def test_consistent_read_snapshot_in_wal_mode(tmp_path: Path) -> None:
     # Second run sees both rows
     res2 = parse_database(discovered)
     assert len(res2.events) == 2
+
+
+def test_resolve_raw_model_id_precedence_and_inheritance(tmp_path: Path) -> None:
+    """Verify resolve_raw_model_id precedence and model_id inheritance into retries and steps."""
+    assert resolve_raw_model_id(1418, 1036, 312) == 1418
+    assert resolve_raw_model_id(0, 1036, 312) == 1036
+    assert resolve_raw_model_id(None, 0, 312) == 312
+    assert resolve_raw_model_id(None, None, None) is None
+
+    db_file = tmp_path / "inherit_model_id.db"
+    conn = sqlite3.connect(str(db_file))
+    conn.execute("CREATE TABLE gen_metadata (idx INTEGER PRIMARY KEY, data BLOB)")
+    conn.execute("CREATE TABLE steps (idx INTEGER PRIMARY KEY, metadata BLOB)")
+
+    # Gen row 1 has meta_model_id = 1418 (field 3), primary usage has no usage_model_id,
+    # retry usage has no usage_model_id -> both inherit 1418
+    primary_usage = encode_model_usage(model_id=None, input_tokens=20, visible_output_tokens=10, response_id="r_gen")
+    retry_usage = encode_model_usage(model_id=None, input_tokens=15, visible_output_tokens=5, response_id="r_retry")
+    chat_model = (
+        encode_varint_field(3, 1418) + encode_bytes(4, primary_usage) + encode_bytes(17, encode_bytes(2, retry_usage))
+    )
+    conn.execute("INSERT INTO gen_metadata (idx, data) VALUES (1, ?)", [encode_bytes(1, chat_model)])
+
+    # Step row 1 has neither usage model_id nor step model_info -> inherits 1418 from gen row
+    step_usage = encode_model_usage(model_id=None, input_tokens=30, visible_output_tokens=12, response_id="r_step")
+    step_blob = encode_bytes(9, step_usage)
+    conn.execute("INSERT INTO steps (idx, metadata) VALUES (1, ?)", [step_blob])
+    conn.commit()
+    conn.close()
+
+    discovered = DiscoveredDatabase(database_path=db_file, discovery_source="cli", session_id="inherit_model_id")
+    result = parse_database(discovered)
+
+    assert len(result.events) == 3
+    for ev in result.events:
+        assert ev.model_id == 1418
+        assert ev.model_code == "gemini-4-argon-medium"

@@ -72,5 +72,5 @@ class IngestionService:
         counters.canonical_events_written = len(canonical_events)
         counters.duplicate_events_merged = counters.raw_events_extracted - counters.canonical_events_written
 
-        self._repository.replace_all_events(canonical_events)
+        self._repository.update_all_events(canonical_events)
         return counters

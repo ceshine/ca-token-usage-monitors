@@ -47,6 +47,7 @@ def test_deduplicate_across_cli_and_ide_sources() -> None:
         event_timestamp=TS_LATE,
         timestamp_rank=3,
         model_code="gemini-internal-model",
+        model_id=None,
         provider_id=None,
         input_tokens=50,
         output_tokens=20,
@@ -66,6 +67,7 @@ def test_deduplicate_across_cli_and_ide_sources() -> None:
         event_timestamp=TS_EARLY,
         timestamp_rank=3,
         model_code="gemini-3.6-flash",
+        model_id=1196,
         provider_id=24,
         input_tokens=30,
         output_tokens=40,
@@ -97,6 +99,7 @@ def test_deduplicate_across_cli_and_ide_sources() -> None:
 
     # Non-default model preferred over gemini-internal-model
     assert row.model_code == "gemini-3.6-flash"
+    assert row.model_id == 1196
     assert row.provider_id == 24
 
     # Timestamp tie-breaker: earlier timestamp selected (TS_EARLY)

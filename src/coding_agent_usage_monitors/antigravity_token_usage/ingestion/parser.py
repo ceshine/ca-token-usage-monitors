@@ -300,6 +300,27 @@ def resolve_model_code(
     return "gemini-internal-model"
 
 
+def resolve_raw_model_id(
+    usage_model_id: int | None,
+    meta_model_id: int | None,
+    inherited_model_id: int | None = None,
+) -> int | None:
+    """Resolve raw numeric model ID in precedence order: usage_model_id, meta_model_id, inherited.
+
+    Args:
+        usage_model_id (int | None): ModelUsage field 1 ID.
+        meta_model_id (int | None): Enclosing metadata numeric model ID.
+        inherited_model_id (int | None, optional): Inherited generation numeric model ID. Defaults to None.
+
+    Returns:
+        int | None: First non-zero numeric model ID, or None if unavailable.
+    """
+    for candidate in (usage_model_id, meta_model_id, inherited_model_id):
+        if candidate is not None and candidate != 0:
+            return candidate
+    return None
+
+
 def decode_timestamp_message(data: bytes) -> datetime | None:
     """Decode Protobuf TimestampMessage (field 1 seconds, field 2 nanos).
 
@@ -546,6 +567,7 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
     events: list[RawUsageEvent] = []
     canonical_path_str = str(db_path)
     last_resolved_gen_model: str | None = None
+    last_resolved_gen_model_id: int | None = None
 
     for gen_idx, gen_blob in gen_rows:
         if not gen_blob:
@@ -593,7 +615,7 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
         else:
             gen_ts, gen_ts_rank = file_mtime, 0
 
-        # Update last_resolved_gen_model
+        # Update last_resolved_gen_model and last_resolved_gen_model_id
         resolved_row_model = resolve_model_code(
             usage_model_id=None,
             raw_model_name=gen_raw_model_name,
@@ -603,8 +625,23 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
         if resolved_row_model != "gemini-internal-model":
             last_resolved_gen_model = resolved_row_model
 
+        resolved_row_model_id = resolve_raw_model_id(
+            usage_model_id=None,
+            meta_model_id=gen_meta_model_id,
+            inherited_model_id=last_resolved_gen_model_id,
+        )
+        if resolved_row_model_id is not None:
+            last_resolved_gen_model_id = resolved_row_model_id
+
         if primary_usage_bytes:
             u_dict = _parse_model_usage(primary_usage_bytes)
+            primary_model_id = resolve_raw_model_id(
+                usage_model_id=u_dict["model_id"],
+                meta_model_id=gen_meta_model_id,
+                inherited_model_id=last_resolved_gen_model_id,
+            )
+            if primary_model_id is not None and (gen_meta_model_id is None or gen_meta_model_id == 0):
+                last_resolved_gen_model_id = primary_model_id
             if is_token_bearing(
                 u_dict["input_tokens"],
                 u_dict["visible_output_tokens"],
@@ -619,6 +656,8 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                     meta_model_id=gen_meta_model_id,
                     inherited_model=last_resolved_gen_model,
                 )
+                if resolved_row_model == "gemini-internal-model" and model_code != "gemini-internal-model":
+                    last_resolved_gen_model = model_code
                 (
                     inp,
                     out,
@@ -645,6 +684,7 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                         event_timestamp=gen_ts,
                         timestamp_rank=gen_ts_rank,
                         model_code=model_code,
+                        model_id=primary_model_id,
                         provider_id=u_dict["provider_id"],
                         input_tokens=inp,
                         output_tokens=out,
@@ -681,6 +721,11 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                         meta_model_id=gen_meta_model_id,
                         inherited_model=last_resolved_gen_model,
                     )
+                    retry_model_id = resolve_raw_model_id(
+                        usage_model_id=u_dict["model_id"],
+                        meta_model_id=gen_meta_model_id,
+                        inherited_model_id=last_resolved_gen_model_id,
+                    )
                     (
                         inp,
                         out,
@@ -707,6 +752,7 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                             event_timestamp=gen_ts,
                             timestamp_rank=gen_ts_rank,
                             model_code=model_code,
+                            model_id=retry_model_id,
                             provider_id=u_dict["provider_id"],
                             input_tokens=inp,
                             output_tokens=out,
@@ -777,6 +823,11 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                     meta_model_id=step_meta_model_id,
                     inherited_model=last_resolved_gen_model,
                 )
+                step_model_id = resolve_raw_model_id(
+                    usage_model_id=u_dict["model_id"],
+                    meta_model_id=step_meta_model_id,
+                    inherited_model_id=last_resolved_gen_model_id,
+                )
                 provider_id = u_dict["provider_id"] if u_dict["provider_id"] is not None else step_provider_id
                 (
                     inp,
@@ -804,6 +855,7 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                         event_timestamp=step_ts,
                         timestamp_rank=step_ts_rank,
                         model_code=model_code,
+                        model_id=step_model_id,
                         provider_id=provider_id,
                         input_tokens=inp,
                         output_tokens=out,
@@ -840,6 +892,11 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                         meta_model_id=step_meta_model_id,
                         inherited_model=last_resolved_gen_model,
                     )
+                    step_retry_model_id = resolve_raw_model_id(
+                        usage_model_id=u_dict["model_id"],
+                        meta_model_id=step_meta_model_id,
+                        inherited_model_id=last_resolved_gen_model_id,
+                    )
                     provider_id = u_dict["provider_id"] if u_dict["provider_id"] is not None else step_provider_id
                     (
                         inp,
@@ -867,6 +924,7 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                             event_timestamp=step_ts,
                             timestamp_rank=step_ts_rank,
                             model_code=model_code,
+                            model_id=step_retry_model_id,
                             provider_id=provider_id,
                             input_tokens=inp,
                             output_tokens=out,

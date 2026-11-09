@@ -37,6 +37,7 @@ class RawUsageEvent:
     provider_assigned_message_id: str | None
     message_id: str | None
     fallback_key: str
+    model_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,7 @@ class UsageEventRow:
     response_id: str | None
     provider_assigned_message_id: str | None
     message_id: str | None
+    model_id: int | None = None
 
 
 @dataclass
