@@ -34,7 +34,20 @@ def test_render_daily_usage_statistics_includes_token_categories() -> None:
                 cache_read_tokens=20,
                 count=1,
                 cost=0.1,
-            )
+            ),
+            "gemini-3.8-flash-tiered": UsageStats(
+                input_tokens=200,
+                output_tokens=20,
+                reasoning_tokens=10,
+                count=1,
+                cost=0.2,
+            ),
+            "gemini-3.5-flash-lite": UsageStats(
+                input_tokens=300,
+                output_tokens=30,
+                count=1,
+                cost=0.05,
+            ),
         },
         total_events=1,
     )
@@ -44,5 +57,7 @@ def test_render_daily_usage_statistics_includes_token_categories() -> None:
 
     output = console.export_text()
     assert "gemini-3.8-flash-high" in output
+    assert "gemini-3.8-flash-tiered" in output
+    assert "gemini-3.5-flash-lite" in output
     assert "Reasoning Tokens" in output
     assert "Cache Write Tokens" in output

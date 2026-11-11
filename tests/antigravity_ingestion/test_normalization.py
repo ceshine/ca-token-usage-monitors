@@ -38,6 +38,12 @@ def test_placeholder_1000_rule_and_placeholder_aliases() -> None:
     assert placeholder_name == "model_placeholder_m84"
     assert normalize_antigravity_model(placeholder_name) == "gemini-3-flash-preview"
 
+    # Verify placeholder aliases for m198 and m322
+    assert normalize_antigravity_model("model_placeholder_m198") == "gemini-3.5-flash-lite"
+    assert normalize_antigravity_model("model_placeholder_m322") == "gemini-3.8-flash-tiered"
+    assert normalize_antigravity_model("Gemini 3.5 Flash Lite") == "gemini-3.5-flash-lite"
+    assert normalize_antigravity_model("gemini-3.8-flash-tiered") == "gemini-3.8-flash-tiered"
+
 
 def test_gemini_internal_model_fallback() -> None:
     """Verify gemini-internal-model fallback when no model sources resolve."""

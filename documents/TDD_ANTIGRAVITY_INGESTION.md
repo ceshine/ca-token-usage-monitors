@@ -422,6 +422,7 @@ Numeric IDs resolve through this mapping:
 | `1187` | `gemini-3.5-flash-extra-low` |
 | `1188` | `ark-v4xs` |
 | `1196` | `gemini-3.6-flash` |
+| `1198` | `gemini-3.5-flash-lite` |
 | `1250` | `glm-5.2-fp8` |
 | `1254` | `claude-opus-4-8` |
 | `1298` | `gemini-3.7-flash-high` |
@@ -430,6 +431,7 @@ Numeric IDs resolve through this mapping:
 | `1318` | `gemini-3.8-flash-high` |
 | `1319` | `gemini-3.8-flash-medium` |
 | `1320` | `gemini-3.8-flash-low` |
+| `1322` | `gemini-3.8-flash-tiered` |
 | `1368` | `claude-opus-5-5` |
 | `1377` | `claude-sonnet-5-5` |
 | `1400` | `claude-opus-5-5-low` |
@@ -466,10 +468,12 @@ Base aliases are:
 | --- | --- |
 | `gemini 4 argon`, `gemini 4 argon thinking` | `gemini-4-argon` |
 | `gemini 3.8 flash`, `gemini 3.8 flash thinking` | `gemini-3.8-flash` |
+| `gemini 3.8 flash tiered`, `gemini-3.8-flash-tiered` | `gemini-3.8-flash-tiered` |
 | `gemini 3.7 flash`, `gemini 3.7 flash thinking` | `gemini-3.7-flash` |
 | `gemini 3.7 pro`, `gemini 3.7 pro thinking` | `gemini-3.7-pro` |
 | `gemini 3.6 flash`, `gemini 3 flash` | `gemini-3.6-flash` |
 | `gemini 3.5 flash` | `gemini-3.5-flash` |
+| `gemini 3.5 flash lite`, `gemini-3.5-flash-lite` | `gemini-3.5-flash-lite` |
 | `gemini 3.1 flash lite`, `gemini-3.1-flash-lite` | `gemini-3.1-flash-lite-preview` |
 | `gemini 3.1 flash image`, `gemini-3.1-flash-image-preview` | `gemini-3.1-flash-image` |
 | `gemini for google 3.1 flash` | `gemini-for-google-3.1-flash` |
@@ -498,6 +502,7 @@ Base aliases are:
 | `model_placeholder_m318` | `gemini-3.8-flash-high` |
 | `model_placeholder_m319` | `gemini-3.8-flash-medium` |
 | `model_placeholder_m320` | `gemini-3.8-flash-low` |
+| `model_placeholder_m322` | `gemini-3.8-flash-tiered` |
 | `model_placeholder_m298` | `gemini-3.7-flash-high` |
 | `model_placeholder_m299` | `gemini-3.7-flash-medium` |
 | `model_placeholder_m300` | `gemini-3.7-flash-low` |
@@ -506,6 +511,7 @@ Base aliases are:
 | `model_placeholder_m72`, `model_placeholder_m252` | `gemini-3.6-flash-medium` |
 | `model_placeholder_m73`, `model_placeholder_m253` | `gemini-3.6-flash-low` |
 | `model_placeholder_m250` | `glm-5.2-fp8` |
+| `model_placeholder_m198` | `gemini-3.5-flash-lite` |
 | `model_placeholder_m196` | `gemini-3.6-flash` |
 | `model_placeholder_m188` | `ark-v4xs` |
 | `model_placeholder_m149` | `gemini-3.5-flash` |

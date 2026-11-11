@@ -97,7 +97,11 @@ CREATE TABLE antigravity_usage_events (
             """
 INSERT INTO antigravity_usage_events VALUES
 ('event-1', 'default', 'session-1', '2026-09-21T00:00:00+00:00', 'gemini-3.8-flash-high', NULL,
- 100, 10, 5, 15, 4, 20, 139)
+ 100, 10, 5, 15, 4, 20, 139),
+('event-2', 'default', 'session-1', '2026-09-21T00:00:00+00:00', 'gemini-3.8-flash-tiered', 1322,
+ 200, 20, 10, 30, 0, 0, 230),
+('event-3', 'default', 'session-1', '2026-09-21T00:00:00+00:00', 'gemini-3.5-flash-lite', 1198,
+ 300, 30, 0, 30, 0, 0, 330)
             """
         )
     finally:
@@ -110,7 +114,13 @@ INSERT INTO antigravity_usage_events VALUES
                 "output_cost_per_token": 0.002,
                 "cache_read_input_token_cost": 0.0001,
                 "cache_creation_input_token_cost": 0.0002,
-            }
+            },
+            "google/gemini-3.5-flash-lite": {
+                "input_cost_per_token": 0.0005,
+                "output_cost_per_token": 0.001,
+                "cache_read_input_token_cost": 0.00005,
+                "cache_creation_input_token_cost": 0.0001,
+            },
         },
     )
 

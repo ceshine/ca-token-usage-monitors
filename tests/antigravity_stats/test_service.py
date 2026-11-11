@@ -17,6 +17,8 @@ from coding_agent_usage_monitors.antigravity_token_usage.stats.service import (
 def test_resolve_pricing_model_name_normalizes_antigravity_model_codes() -> None:
     """Pricing lookup should normalize effort and version-first provider model names."""
     assert resolve_pricing_model_name("gemini-3.8-flash-high") == "google/gemini-3.8-flash"
+    assert resolve_pricing_model_name("gemini-3.8-flash-tiered") == "google/gemini-3.8-flash"
+    assert resolve_pricing_model_name("gemini-3.5-flash-lite") == "google/gemini-3.5-flash-lite"
     assert resolve_pricing_model_name("gemini-4-argon-medium") == "google/gemini-4-argon"
     assert resolve_pricing_model_name("gemini-2.5-flash-thinking") == "google/gemini-2.5-flash"
     assert resolve_pricing_model_name("claude-4.5-sonnet") == "anthropic/claude-sonnet-4-5"
