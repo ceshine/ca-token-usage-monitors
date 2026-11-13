@@ -44,6 +44,14 @@ uv sync --frozen
 
 ## Release Notes
 
+### 0.5.1
+
+- **New AntiGravity Model Mappings & Pricing Normalization:**
+  - Added numeric ID, placeholder, and display-name mappings for `gemini-4-hydrogen` (`high`, `medium`, `low`, `xhigh`), `gemini-4-carbon` (`high`, `medium`, `low`), `gemini-pro-orchestrator-g1-pro` (`Orchestrator (Argon)`), `gemini-3.5-flash-lite`, and `gemini-3.8-flash-tiered`.
+  - Updated Gemini pricing lookup to handle `-xhigh` and `-tiered` effort suffixes (while `Orchestrator (Argon)` mixes underlying models and reports `$0.000000`).
+- **AntiGravity Usage Guide:**
+  - Added [README_ANTIGRAVITY_CLI.md](./README_ANTIGRAVITY_CLI.md) and registered `agy-token-usage` in the supported agents overview.
+
 ### 0.5.0 (breaking)
 
 - **AntiGravity Raw `model_id` Persistence & Upsert:**
