@@ -38,11 +38,20 @@ def test_placeholder_1000_rule_and_placeholder_aliases() -> None:
     assert placeholder_name == "model_placeholder_m84"
     assert normalize_antigravity_model(placeholder_name) == "gemini-3-flash-preview"
 
-    # Verify placeholder aliases for m198 and m322
+    # Verify placeholder aliases for m198, m322, m427/m437/m438, m525-m528, and m668
     assert normalize_antigravity_model("model_placeholder_m198") == "gemini-3.5-flash-lite"
     assert normalize_antigravity_model("model_placeholder_m322") == "gemini-3.8-flash-tiered"
+    assert normalize_antigravity_model("model_placeholder_m427") == "gemini-4-carbon-high"
+    assert normalize_antigravity_model("model_placeholder_m437") == "gemini-4-carbon-medium"
+    assert normalize_antigravity_model("model_placeholder_m438") == "gemini-4-carbon-low"
+    assert normalize_antigravity_model("model_placeholder_m525") == "gemini-4-hydrogen-high"
+    assert normalize_antigravity_model("model_placeholder_m526") == "gemini-4-hydrogen-medium"
+    assert normalize_antigravity_model("model_placeholder_m527") == "gemini-4-hydrogen-low"
+    assert normalize_antigravity_model("model_placeholder_m528") == "gemini-4-hydrogen-xhigh"
+    assert normalize_antigravity_model("model_placeholder_m668") == "gemini-pro-orchestrator-g1-pro"
     assert normalize_antigravity_model("Gemini 3.5 Flash Lite") == "gemini-3.5-flash-lite"
     assert normalize_antigravity_model("gemini-3.8-flash-tiered") == "gemini-3.8-flash-tiered"
+    assert normalize_antigravity_model("Orchestrator (Argon)") == "gemini-pro-orchestrator-g1-pro"
 
 
 def test_gemini_internal_model_fallback() -> None:
@@ -69,13 +78,20 @@ def test_candidate_usage_model_id_overrides_raw_name() -> None:
 
 
 def test_parenthesized_effort_aliases() -> None:
-    """Verify parenthesized effort aliases for Gemini Flash/Argon and Claude 5.5."""
+    """Verify parenthesized effort aliases for Gemini Flash/Argon/Hydrogen/Carbon and Claude 5.5."""
     assert normalize_antigravity_model("gemini 3.6 flash (high)") == "gemini-3.6-flash-high"
     assert normalize_antigravity_model("Gemini 3.7 Flash (Medium)") == "gemini-3.7-flash-medium"
     assert normalize_antigravity_model("GEMINI 3.8 FLASH (LOW)") == "gemini-3.8-flash-low"
     assert normalize_antigravity_model("Gemini 4 Argon (High)") == "gemini-4-argon-high"
     assert normalize_antigravity_model("Gemini 4 Argon (Medium)") == "gemini-4-argon-medium"
     assert normalize_antigravity_model("Gemini 4 Argon (Low)") == "gemini-4-argon-low"
+    assert normalize_antigravity_model("Gemini 4 Hydrogen (XHigh)") == "gemini-4-hydrogen-xhigh"
+    assert normalize_antigravity_model("Gemini 4 Hydrogen (High)") == "gemini-4-hydrogen-high"
+    assert normalize_antigravity_model("Gemini 4 Hydrogen (Medium)") == "gemini-4-hydrogen-medium"
+    assert normalize_antigravity_model("Gemini 4 Hydrogen (Low)") == "gemini-4-hydrogen-low"
+    assert normalize_antigravity_model("Gemini 4 Carbon (High)") == "gemini-4-carbon-high"
+    assert normalize_antigravity_model("Gemini 4 Carbon (Medium)") == "gemini-4-carbon-medium"
+    assert normalize_antigravity_model("Gemini 4 Carbon (Low)") == "gemini-4-carbon-low"
     assert normalize_antigravity_model("Claude Opus 5.5 (Low)") == "claude-opus-5-5-low"
     assert normalize_antigravity_model("Claude Opus 5.5 (Max)") == "claude-opus-5-5-max"
     assert normalize_antigravity_model("Claude Sonnet 5.5 (Medium)") == "claude-sonnet-5-5-medium"

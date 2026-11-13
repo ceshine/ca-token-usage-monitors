@@ -79,11 +79,24 @@ NUMERIC_MODEL_MAP: dict[int, str] = {
     1417: "gemini-4-argon-high",
     1418: "gemini-4-argon-medium",
     1419: "gemini-4-argon-low",
+    1427: "gemini-4-carbon-high",
+    1437: "gemini-4-carbon-medium",
+    1438: "gemini-4-carbon-low",
+    1525: "gemini-4-hydrogen-high",
+    1526: "gemini-4-hydrogen-medium",
+    1527: "gemini-4-hydrogen-low",
+    1528: "gemini-4-hydrogen-xhigh",
+    1668: "gemini-pro-orchestrator-g1-pro",
 }
 
 BASE_ALIASES: dict[str, str] = {
+    "gemini 4 hydrogen": "gemini-4-hydrogen",
+    "gemini 4 hydrogen thinking": "gemini-4-hydrogen",
+    "gemini 4 carbon": "gemini-4-carbon",
+    "gemini 4 carbon thinking": "gemini-4-carbon",
     "gemini 4 argon": "gemini-4-argon",
     "gemini 4 argon thinking": "gemini-4-argon",
+    "orchestrator": "gemini-pro-orchestrator-g1-pro",
     "gemini 3.8 flash": "gemini-3.8-flash",
     "gemini 3.8 flash thinking": "gemini-3.8-flash",
     "gemini 3.8 flash tiered": "gemini-3.8-flash-tiered",
@@ -113,6 +126,14 @@ BASE_ALIASES: dict[str, str] = {
     "gemini 2.0 pro": "gemini-2.0-pro",
     "gemini 1.5 flash": "gemini-1.5-flash",
     "gemini 1.5 pro": "gemini-1.5-pro",
+    "model_placeholder_m668": "gemini-pro-orchestrator-g1-pro",
+    "model_placeholder_m528": "gemini-4-hydrogen-xhigh",
+    "model_placeholder_m527": "gemini-4-hydrogen-low",
+    "model_placeholder_m526": "gemini-4-hydrogen-medium",
+    "model_placeholder_m525": "gemini-4-hydrogen-high",
+    "model_placeholder_m438": "gemini-4-carbon-low",
+    "model_placeholder_m437": "gemini-4-carbon-medium",
+    "model_placeholder_m427": "gemini-4-carbon-high",
     "model_placeholder_m417": "gemini-4-argon-high",
     "model_placeholder_m418": "gemini-4-argon-medium",
     "model_placeholder_m419": "gemini-4-argon-low",
@@ -192,7 +213,7 @@ BASE_ALIASES: dict[str, str] = {
 }
 
 EFFORT_REGEX: re.Pattern[str] = re.compile(
-    r"^gemini\s+([3-9](?:\.[0-9]+)?)\s+(flash|argon)\s*\((high|medium|low)\)$",
+    r"^gemini\s+([3-9](?:\.[0-9]+)?)\s+(flash|argon|hydrogen|carbon)\s*\((xhigh|high|medium|low)\)$",
     re.IGNORECASE,
 )
 CLAUDE_EFFORT_REGEX: re.Pattern[str] = re.compile(

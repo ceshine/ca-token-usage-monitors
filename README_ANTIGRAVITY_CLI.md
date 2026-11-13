@@ -83,9 +83,9 @@ The command renders three tables—**Daily Token Usage**, **Daily Aggregated Usa
 
 ### Cost calculation
 
-Costs are computed at report time from persisted token counts and model prices (sourced from [models.dev](https://models.dev/)). Normalized `gemini-*` and `claude-*` model codes are mapped to `google/<model>` and `anthropic/<model>` price keys (stripping reasoning-effort suffixes such as `-thinking`, `-high`, `-medium`, `-low`, `-extra-low`, `-tiered`, and `-max`).
+Costs are computed at report time from persisted token counts and model prices (sourced from [models.dev](https://models.dev/)). Normalized `gemini-*` and `claude-*` model codes are mapped to `google/<model>` and `anthropic/<model>` price keys (stripping reasoning-effort suffixes such as `-thinking`, `-xhigh`, `-high`, `-medium`, `-low`, `-extra-low`, `-tiered`, and `-max`).
 
-For each event, cost is calculated across input tokens, combined output and reasoning tokens (`output_tokens + reasoning_tokens` billed at the output token rate), cache read tokens, and cache creation tokens (falling back to the input token rate if no cache-write rate is defined). Models without a matching entry in the pricing catalog report `$0.000000`.
+For each event, cost is calculated across input tokens, combined output and reasoning tokens (`output_tokens + reasoning_tokens` billed at the output token rate), cache read tokens, and cache creation tokens (falling back to the input token rate if no cache-write rate is defined). Models without a matching entry in the pricing catalog report `$0.000000`. In particular, `Orchestrator (Argon)` (`gemini-pro-orchestrator-g1-pro`) uses a mixture of different underlying models, so its cost cannot be estimated from token usage alone and it reports `$0.000000`.
 
 ---
 

@@ -14,7 +14,7 @@ from .schemas import UsageStats, TokenUsageEvent, DailyUsageStatistics
 from .repository import StatsRepository
 
 _GEMINI_EFFORT_MODEL_PATTERN = re.compile(
-    r"^(gemini-\d+(?:\.\d+)?-(?:flash|pro|argon))(?:-(?:thinking|high|medium|low|extra-low|tiered))$"
+    r"^(gemini-\d+(?:\.\d+)?-(?:flash|pro|argon|hydrogen|carbon))(?:-(?:thinking|xhigh|high|medium|low|extra-low|tiered))$"
 )
 _CLAUDE_VERSION_FIRST_PATTERN = re.compile(r"^claude-(\d+(?:[.-]\d+)?)-(opus|sonnet|haiku)$")
 _CLAUDE_EFFORT_MODEL_PATTERN = re.compile(r"^(claude-(?:opus|sonnet|haiku)-\d+(?:-\d+)?)(?:-(?:low|medium|high|max))$")

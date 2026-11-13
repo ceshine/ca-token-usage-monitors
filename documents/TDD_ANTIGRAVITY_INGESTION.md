@@ -445,6 +445,14 @@ Numeric IDs resolve through this mapping:
 | `1417` | `gemini-4-argon-high` |
 | `1418` | `gemini-4-argon-medium` |
 | `1419` | `gemini-4-argon-low` |
+| `1427` | `gemini-4-carbon-high` |
+| `1437` | `gemini-4-carbon-medium` |
+| `1438` | `gemini-4-carbon-low` |
+| `1525` | `gemini-4-hydrogen-high` |
+| `1526` | `gemini-4-hydrogen-medium` |
+| `1527` | `gemini-4-hydrogen-low` |
+| `1528` | `gemini-4-hydrogen-xhigh` |
+| `1668` | `gemini-pro-orchestrator-g1-pro` |
 | Unlisted ID below `1000` | `antigravity-model-{model_id}` |
 | `1000+` | `model_placeholder_m{model_id - 1000}` |
 
@@ -455,10 +463,10 @@ Normalize a resolved model string as follows:
 3. If no parenthesized effort alias matched, discard the first `(` and everything after it, then trim the remaining base string and match it against the base aliases below.
 4. If still unmatched, replace ASCII spaces with hyphens. Return that converted value only when it begins with `gemini-`, `claude-`, or `gpt-`; otherwise preserve the trimmed original string, including its original case and punctuation.
 
-Parenthesized effort aliases match Gemini (`flash` or `argon` with effort `high`, `medium`, or `low`) and Claude (`opus` or `sonnet` with dotted version and effort `low`, `medium`, `high`, or `max`):
+Parenthesized effort aliases match Gemini (`flash`, `argon`, `hydrogen`, or `carbon` with effort `xhigh`, `high`, `medium`, or `low`) and Claude (`opus` or `sonnet` with dotted version and effort `low`, `medium`, `high`, or `max`):
 
 ```text
-gemini <version> <flash|argon> (<high|medium|low>) -> gemini-<version>-<flash|argon>-<effort>
+gemini <version> <flash|argon|hydrogen|carbon> (<xhigh|high|medium|low>) -> gemini-<version>-<flash|argon|hydrogen|carbon>-<effort>
 claude <opus|sonnet> <major.minor> (<low|medium|high|max>) -> claude-<opus|sonnet>-<major-minor>-<effort>
 ```
 
@@ -466,7 +474,10 @@ Base aliases are:
 
 | Raw lowercased base | Canonical model code |
 | --- | --- |
+| `gemini 4 hydrogen`, `gemini 4 hydrogen thinking` | `gemini-4-hydrogen` |
+| `gemini 4 carbon`, `gemini 4 carbon thinking` | `gemini-4-carbon` |
 | `gemini 4 argon`, `gemini 4 argon thinking` | `gemini-4-argon` |
+| `orchestrator` | `gemini-pro-orchestrator-g1-pro` |
 | `gemini 3.8 flash`, `gemini 3.8 flash thinking` | `gemini-3.8-flash` |
 | `gemini 3.8 flash tiered`, `gemini-3.8-flash-tiered` | `gemini-3.8-flash-tiered` |
 | `gemini 3.7 flash`, `gemini 3.7 flash thinking` | `gemini-3.7-flash` |
@@ -486,6 +497,14 @@ Base aliases are:
 | `gemini 2.0 pro` | `gemini-2.0-pro` |
 | `gemini 1.5 flash` | `gemini-1.5-flash` |
 | `gemini 1.5 pro` | `gemini-1.5-pro` |
+| `model_placeholder_m668` | `gemini-pro-orchestrator-g1-pro` |
+| `model_placeholder_m528` | `gemini-4-hydrogen-xhigh` |
+| `model_placeholder_m527` | `gemini-4-hydrogen-low` |
+| `model_placeholder_m526` | `gemini-4-hydrogen-medium` |
+| `model_placeholder_m525` | `gemini-4-hydrogen-high` |
+| `model_placeholder_m438` | `gemini-4-carbon-low` |
+| `model_placeholder_m437` | `gemini-4-carbon-medium` |
+| `model_placeholder_m427` | `gemini-4-carbon-high` |
 | `model_placeholder_m417` | `gemini-4-argon-high` |
 | `model_placeholder_m418` | `gemini-4-argon-medium` |
 | `model_placeholder_m419` | `gemini-4-argon-low` |
@@ -544,6 +563,8 @@ Base aliases are:
 | `claude 3.5 sonnet` | `claude-3-5-sonnet` |
 | `claude 3.5 haiku` | `claude-3-5-haiku` |
 | `claude 3 opus` | `claude-3-opus` |
+
+Note that `Orchestrator (Argon)` (`gemini-pro-orchestrator-g1-pro`) is a mixture of different underlying models, so its cost cannot be estimated from its token usage. Because only this single orchestrator variant currently exists, discarding the parenthesized qualifier maps `orchestrator` directly to `gemini-pro-orchestrator-g1-pro`.
 
 The numeric provider ID is retained as `provider_id`. Known source values are `3` (Vertex AI), `24` (Gemini), and `30` (Evergreen), but no provider display-name column is needed for ingestion.
 
