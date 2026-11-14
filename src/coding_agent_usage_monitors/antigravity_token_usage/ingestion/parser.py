@@ -12,6 +12,7 @@ from typing import Any
 from .errors import InvalidDataError, SQLiteSchemaError, ProtobufParseError
 from .schemas import RawUsageEvent, DiscoveredDatabase
 from .protobuf import (
+    ProtobufField,
     parse_protobuf,
     get_bytes_field,
     get_string_field,
@@ -194,6 +195,8 @@ BASE_ALIASES: dict[str, str] = {
     "gemini-3-flash-b": "gemini-3.5-flash-high",
     "gemini-3-flash-c": "gemini-3-flash-preview",
     "gemini-3-flash": "gemini-3-flash-preview",
+    "gemini-3.8-flash-n": "gemini-3.8-flash",
+    "gemini-4-argon-trial": "gemini-4-argon",
     "gemini-3.5-flash-low": "gemini-3.5-flash-medium",
     "gemini-3.1-pro-high": "gemini-3.1-pro",
     "gemini-3.1-pro-low": "gemini-3.1-pro",
@@ -491,6 +494,129 @@ def _parse_model_usage(usage_bytes: bytes) -> dict[str, Any]:
     }
 
 
+_EFFORT_SUFFIXES: tuple[str, ...] = ("-xhigh", "-high", "-medium", "-low", "-max")
+
+
+def _has_effort_suffix(normalized_name: str | None) -> bool:
+    """Return whether a normalized model name includes an explicit effort suffix.
+
+    Args:
+        normalized_name (str | None): Normalized model string.
+
+    Returns:
+        bool: True if normalized_name ends with a recognized effort suffix.
+    """
+    return bool(normalized_name and normalized_name.endswith(_EFFORT_SUFFIXES))
+
+
+def _select_raw_model_name(primary_name: str | None, display_name: str | None) -> str | None:
+    """Select raw model name, preferring an effort-qualified display name over a bare slug.
+
+    Args:
+        primary_name (str | None): Primary internal model slug (e.g., field 19).
+        display_name (str | None): Secondary or display model name (e.g., field 21).
+
+    Returns:
+        str | None: Selected raw model string, or None if both are absent.
+    """
+    if display_name:
+        norm_display = normalize_antigravity_model(display_name)
+        norm_primary = normalize_antigravity_model(primary_name)
+        if _has_effort_suffix(norm_display) and not _has_effort_suffix(norm_primary):
+            return display_name
+    return primary_name or display_name
+
+
+def _has_usage_identity(u_dict: dict[str, Any]) -> bool:
+    """Check whether parsed ModelUsage contains at least one explicit identity field.
+
+    Args:
+        u_dict (dict[str, Any]): Parsed ModelUsage dictionary.
+
+    Returns:
+        bool: True if response_id, provider_assigned_message_id, or message_id is non-empty.
+    """
+    return bool(
+        (u_dict["response_id"] and u_dict["response_id"].strip())
+        or (u_dict["provider_assigned_message_id"] and u_dict["provider_assigned_message_id"].strip())
+        or (u_dict["message_id"] and u_dict["message_id"].strip())
+    )
+
+
+def _usage_signature(u_dict: dict[str, Any]) -> tuple[int, int, int, int, int, int]:
+    """Build a token-counter signature tuple for intra-row retry deduplication.
+
+    Args:
+        u_dict (dict[str, Any]): Parsed ModelUsage dictionary.
+
+    Returns:
+        tuple[int, int, int, int, int, int]: Raw token counters tuple.
+    """
+    return (
+        u_dict["input_tokens"],
+        u_dict["visible_output_tokens"],
+        u_dict["reasoning_tokens"],
+        u_dict["total_output_tokens"],
+        u_dict["cache_creation_tokens"],
+        u_dict["cache_read_tokens"],
+    )
+
+
+def _extract_gen_request_key(chat_fields: list[ProtobufField], gen_idx: int) -> str | None:
+    """Extract request-level deduplication key from gen_metadata chat_model field 20.
+
+    Args:
+        chat_fields (list[ProtobufField]): Decoded chat_model protobuf fields.
+        gen_idx (int): Row index in gen_metadata.
+
+    Returns:
+        str | None: Request key string if request_id or trajectory_id is present, else None.
+    """
+    request_id: str | None = None
+    trajectory_id: str | None = None
+    for kv_bytes in get_all_bytes_fields(chat_fields, 20):
+        try:
+            kv_fields = parse_protobuf(kv_bytes)
+            key = get_string_field(kv_fields, 1)
+            val = get_string_field(kv_fields, 2)
+        except ProtobufParseError:
+            continue
+        if key == "request_id" and val and val.strip():
+            request_id = val.strip()
+            break
+        if key == "trajectory_id" and val and val.strip():
+            trajectory_id = val.strip()
+
+    if request_id:
+        return request_id
+    if trajectory_id:
+        return f"{trajectory_id}-{gen_idx}"
+    return None
+
+
+def _extract_step_request_key(step_fields: list[ProtobufField]) -> str | None:
+    """Extract request-level deduplication key from steps metadata field 20.
+
+    Args:
+        step_fields (list[ProtobufField]): Decoded step metadata protobuf fields.
+
+    Returns:
+        str | None: Request key string matching gen_metadata request_id format, or None.
+    """
+    ref_bytes = get_bytes_field(step_fields, 20)
+    if not ref_bytes:
+        return None
+    try:
+        ref_fields = parse_protobuf(ref_bytes)
+        trajectory_id = get_string_field(ref_fields, 1)
+        gen_idx = get_varint_field(ref_fields, 3) or 0
+    except ProtobufParseError:
+        return None
+    if trajectory_id and trajectory_id.strip():
+        return f"{trajectory_id.strip()}-{gen_idx}"
+    return None
+
+
 def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
     """Query and parse an AntiGravity SQLite database into candidate raw events.
 
@@ -622,10 +748,15 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
             raise
 
         gen_meta_model_id = get_varint_field(chat_fields, 3)
-        gen_raw_model_name = get_string_field(chat_fields, 19) or get_string_field(chat_fields, 21)
+        gen_raw_model_name = _select_raw_model_name(
+            get_string_field(chat_fields, 19),
+            get_string_field(chat_fields, 21),
+        )
+        gen_request_key = _extract_gen_request_key(chat_fields, gen_idx)
         primary_usage_bytes = get_bytes_field(chat_fields, 4)
         gen_info_bytes = get_bytes_field(chat_fields, 9)
         retry_blobs = get_all_bytes_fields(chat_fields, 17)
+        seen_anonymous_usage_sigs: set[tuple[int, int, int, int, int, int]] = set()
 
         gen_explicit_ts: datetime | None = None
         if gen_info_bytes:
@@ -687,6 +818,9 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                 )
                 if resolved_row_model == "gemini-internal-model" and model_code != "gemini-internal-model":
                     last_resolved_gen_model = model_code
+                has_id = _has_usage_identity(u_dict)
+                if not has_id:
+                    seen_anonymous_usage_sigs.add(_usage_signature(u_dict))
                 (
                     inp,
                     out,
@@ -726,6 +860,7 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                         provider_assigned_message_id=u_dict["provider_assigned_message_id"],
                         message_id=u_dict["message_id"],
                         fallback_key=f"fallback:{canonical_path_str}:gen_metadata:{gen_idx}:primary",
+                        request_key=gen_request_key if (not has_id and gen_request_key) else None,
                     )
                 )
 
@@ -744,6 +879,11 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                     u_dict["cache_creation_tokens"],
                     u_dict["cache_read_tokens"],
                 ):
+                    if not _has_usage_identity(u_dict):
+                        sig = _usage_signature(u_dict)
+                        if sig in seen_anonymous_usage_sigs:
+                            continue
+                        seen_anonymous_usage_sigs.add(sig)
                     model_code = resolve_model_code(
                         usage_model_id=u_dict["model_id"],
                         raw_model_name=gen_raw_model_name,
@@ -831,10 +971,15 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
             mi_fields = parse_protobuf(model_info_bytes)
             step_meta_model_id = get_varint_field(mi_fields, 1)
             step_provider_id = get_varint_field(mi_fields, 7)
-            step_raw_name = get_string_field(mi_fields, 12) or get_string_field(mi_fields, 8)
+            step_raw_name = _select_raw_model_name(
+                get_string_field(mi_fields, 12),
+                get_string_field(mi_fields, 8),
+            )
 
+        step_request_key = _extract_step_request_key(step_fields)
         primary_usage_bytes = get_bytes_field(step_fields, 9)
         retry_blobs = get_all_bytes_fields(step_fields, 28)
+        seen_step_anonymous_sigs: set[tuple[int, int, int, int, int, int]] = set()
 
         if primary_usage_bytes:
             u_dict = _parse_model_usage(primary_usage_bytes)
@@ -846,6 +991,9 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                 u_dict["cache_creation_tokens"],
                 u_dict["cache_read_tokens"],
             ):
+                has_id = _has_usage_identity(u_dict)
+                if not has_id:
+                    seen_step_anonymous_sigs.add(_usage_signature(u_dict))
                 model_code = resolve_model_code(
                     usage_model_id=u_dict["model_id"],
                     raw_model_name=step_raw_name,
@@ -897,6 +1045,7 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                         provider_assigned_message_id=u_dict["provider_assigned_message_id"],
                         message_id=u_dict["message_id"],
                         fallback_key=f"fallback:{canonical_path_str}:steps:{step_idx}:primary",
+                        request_key=step_request_key if (not has_id and step_request_key) else None,
                     )
                 )
 
@@ -915,6 +1064,11 @@ def parse_database(discovered_db: DiscoveredDatabase) -> ParseResult:
                     u_dict["cache_creation_tokens"],
                     u_dict["cache_read_tokens"],
                 ):
+                    if not _has_usage_identity(u_dict):
+                        sig = _usage_signature(u_dict)
+                        if sig in seen_step_anonymous_sigs:
+                            continue
+                        seen_step_anonymous_sigs.add(sig)
                     model_code = resolve_model_code(
                         usage_model_id=u_dict["model_id"],
                         raw_model_name=step_raw_name,

@@ -313,3 +313,81 @@ def test_resolve_raw_model_id_precedence_and_inheritance(tmp_path: Path) -> None
     for ev in result.events:
         assert ev.model_id == 1418
         assert ev.model_code == "gemini-4-argon-medium"
+
+
+def test_acp_anonymous_usage_request_key_and_display_model_selection(tmp_path: Path) -> None:
+    """Verify ACP-style rows without ModelUsage IDs skip mirror retries, link steps, and prefer effort name."""
+    db_file = tmp_path / "acp_session.db"
+    conn = sqlite3.connect(str(db_file))
+    conn.execute("CREATE TABLE gen_metadata (idx INTEGER PRIMARY KEY, data BLOB)")
+    conn.execute("CREATE TABLE steps (idx INTEGER PRIMARY KEY, metadata BLOB)")
+
+    # Row 0: BYOM meta_model_id=326, field 19='gemini-3.8-flash-n', field 21='gemini-3.8-flash-high'
+    primary_usage = encode_model_usage(
+        model_id=None, input_tokens=16827, visible_output_tokens=92, reasoning_tokens=341
+    )
+    mirror_retry = encode_bytes(2, primary_usage)
+    distinct_retry_usage = encode_model_usage(model_id=None, input_tokens=500, visible_output_tokens=10)
+    distinct_retry = encode_bytes(2, distinct_retry_usage)
+    kv_traj = encode_string(1, "trajectory_id") + encode_string(2, "traj-123")
+    kv_req = encode_string(1, "request_id") + encode_string(2, "traj-123-0")
+    gen_info = encode_bytes(4, encode_timestamp_msg(1763098118))
+
+    chat_model_0 = (
+        encode_varint_field(3, 326)
+        + encode_bytes(4, primary_usage)
+        + encode_bytes(9, gen_info)
+        + encode_bytes(17, mirror_retry)
+        + encode_bytes(17, distinct_retry)
+        + encode_string(19, "gemini-3.8-flash-n")
+        + encode_bytes(20, kv_traj)
+        + encode_bytes(20, kv_req)
+        + encode_string(21, "gemini-3.8-flash-high")
+    )
+    conn.execute("INSERT INTO gen_metadata (idx, data) VALUES (0, ?)", [encode_bytes(1, chat_model_0)])
+
+    # Row 1: Claude model where field 19 ('claude-sonnet-4-6') should be preserved over field 21 ('Claude Sonnet 4.6 (Thinking)')
+    claude_usage = encode_model_usage(
+        model_id=None, input_tokens=200, visible_output_tokens=30, response_id="resp_claude"
+    )
+    chat_model_1 = (
+        encode_varint_field(3, 1035)
+        + encode_bytes(4, claude_usage)
+        + encode_string(19, "claude-sonnet-4-6")
+        + encode_string(21, "Claude Sonnet 4.6 (Thinking)")
+    )
+    conn.execute("INSERT INTO gen_metadata (idx, data) VALUES (1, ?)", [encode_bytes(1, chat_model_1)])
+
+    # Step row 1 linked to gen_idx=0 (field 3 omitted -> 0) via step_fields[20]
+    step_ref = encode_string(1, "traj-123")
+    step_model_info = encode_string(8, "gemini-3.8-flash-high")
+    step_blob = (
+        encode_bytes(8, encode_timestamp_msg(1763098123))
+        + encode_bytes(9, primary_usage)
+        + encode_bytes(20, step_ref)
+        + encode_bytes(24, step_model_info)
+        + encode_bytes(28, mirror_retry)
+    )
+    conn.execute("INSERT INTO steps (idx, metadata) VALUES (1, ?)", [step_blob])
+    conn.commit()
+    conn.close()
+
+    discovered = DiscoveredDatabase(database_path=db_file, discovery_source="acp", session_id="acp_session")
+    result = parse_database(discovered)
+
+    # Emitted: gen[0].primary, gen[0].distinct_retry, gen[1].primary, steps[1].primary (both mirror retries skipped)
+    assert len(result.events) == 4
+    gen_primary, gen_distinct_retry, gen_claude, step_primary = result.events
+
+    assert gen_primary.model_code == "gemini-3.8-flash-high"
+    assert gen_primary.model_id == 326
+    assert gen_primary.request_key == "traj-123-0"
+
+    assert gen_distinct_retry.input_tokens == 500
+    assert gen_distinct_retry.request_key is None
+
+    assert gen_claude.model_code == "claude-sonnet-4-6"
+    assert gen_claude.request_key is None
+
+    assert step_primary.model_code == "gemini-3.8-flash-high"
+    assert step_primary.request_key == "traj-123-0"

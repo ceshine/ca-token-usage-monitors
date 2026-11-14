@@ -14,11 +14,12 @@ Ingest AntiGravity SQLite conversation databases into the local DuckDB database:
 uv run agy-token-usage ingest
 ```
 
-When neither `--data-dir` nor `ANTIGRAVITY_DATA_DIR` is set, `.db` files are auto-discovered recursively from the following conversation directories (in priority order):
+When neither `--data-dir` nor `ANTIGRAVITY_DATA_DIR` is set, `.db` files are auto-discovered recursively from the following conversation directories (in priority order; when `GEMINI_HOME` is set and non-empty, it replaces `~/.gemini` for all `antigravity*` directories below):
 
 - `~/.gemini/antigravity/conversations/` (`default`)
 - `~/.gemini/antigravity-cli/conversations/` (`cli`)
 - `~/.gemini/antigravity-ide/conversations/` (`ide`)
+- `~/.gemini/antigravity-acp/conversations/` (`acp`)
 - `~/.gemini/antigravity-backup/conversations/` (`backup`)
 - `~/.config/antigravity/conversations/` (`config`)
 
@@ -93,15 +94,15 @@ For each event, cost is calculated across input tokens, combined output and reas
 
 ### Database Discovery and Read-Only Access
 
-- **Canonical Path Deduplication:** Discovered `*.db` files are resolved via `Path.resolve()` so symlinks or overlapping roots are parsed once, retaining the highest-priority `discovery_source` label (`default` > `cli` > `ide` > `backup` > `config` > `env`).
+- **Canonical Path Deduplication:** Discovered `*.db` files are resolved via `Path.resolve()` so symlinks or overlapping roots are parsed once, retaining the highest-priority `discovery_source` label (`default` > `cli` > `ide` > `acp` > `backup` > `config` > `env`).
 - **Session Attribution:** Each database's `session_id` is derived from its `.db` filename stem.
 - **Read-Only Snapshots:** Source SQLite databases are opened in read-only URI mode (`?mode=ro`) with a 5-second `PRAGMA busy_timeout` inside a single deferred read transaction, avoiding lock contention or writes to active AntiGravity databases.
 
 ### Protobuf Parsing, Normalization, and Deduplication
 
 - **Wire-Format Extraction:** A built-in Protocol Buffers wire reader extracts token-bearing primary and retry `ModelUsage` records from the required `gen_metadata` table and optional `steps` table, using `trajectory_metadata_blob` (rank `1`) and file modification time (rank `0`) as timestamp fallbacks when explicit generator/step timestamps (rank `3`) are unavailable.
-- **Model Resolution:** Both the normalized `model_code` and raw numeric `model_id` are extracted and stored in DuckDB so historical records can be re-normalized if numeric model ID mappings are updated later.
-- **Global Deduplication:** Candidate events across rows, tables, and databases are deduplicated by identity keys in preference order (`response:<response_id>`, `provider:<provider_assigned_message_id>`, `message:<message_id>`), including transitive matches. Merged duplicates take the maximum of each token counter, prefer the highest-priority `discovery_source`, and select the highest-ranked (or earliest, on tie) timestamp. Events without any identity key are kept distinct via fallback keys.
+- **Model Resolution:** Both the normalized `model_code` and raw numeric `model_id` are extracted and stored in DuckDB so historical records can be re-normalized if numeric model ID mappings are updated later. When `ModelUsage.model_id` is absent, effort-qualified display names (e.g., `gemini-3.8-flash-high`) are preferred over bare internal slugs (e.g., `gemini-3.8-flash-n`).
+- **Global Deduplication:** Candidate events across rows, tables, and databases are deduplicated by identity keys in preference order (`response:<response_id>`, `provider:<provider_assigned_message_id>`, `message:<message_id>`, and for primary records lacking those `ModelUsage` IDs, `request:<session_id>:<request_id>`), including transitive matches. Identical anonymous retry mirrors within a row are suppressed, while distinct retries and events without any identity key are kept separate via fallback keys. Merged duplicates take the maximum of each token counter, prefer the highest-priority `discovery_source`, and select the highest-ranked (or earliest, on tie) timestamp.
 
 ### Transactional Upsert
 

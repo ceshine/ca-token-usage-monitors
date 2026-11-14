@@ -102,6 +102,8 @@ def test_base_aliases_coverage() -> None:
     """Verify every base alias in BASE_ALIASES normalizes correctly."""
     for raw_alias, expected in BASE_ALIASES.items():
         assert normalize_antigravity_model(raw_alias) == expected
+    assert normalize_antigravity_model("gemini-3.8-flash-n") == "gemini-3.8-flash"
+    assert normalize_antigravity_model("gemini-4-argon-trial") == "gemini-4-argon"
 
 
 def test_recognized_family_fallback_and_unrecognized_preservation() -> None:

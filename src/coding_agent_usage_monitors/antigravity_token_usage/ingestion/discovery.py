@@ -4,23 +4,49 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from collections.abc import Mapping
 
 from .schemas import DiscoveredDatabase
 
+DEFAULT_GEMINI_SUBDIR_SPECS: list[tuple[str, str]] = [
+    ("antigravity/conversations", "default"),
+    ("antigravity-cli/conversations", "cli"),
+    ("antigravity-ide/conversations", "ide"),
+    ("antigravity-acp/conversations", "acp"),
+    ("antigravity-backup/conversations", "backup"),
+]
+
 DEFAULT_ROOT_SPECS: list[tuple[str, str]] = [
-    ("~/.gemini/antigravity/conversations", "default"),
-    ("~/.gemini/antigravity-cli/conversations", "cli"),
-    ("~/.gemini/antigravity-ide/conversations", "ide"),
-    ("~/.gemini/antigravity-backup/conversations", "backup"),
+    *(("~/.gemini/" + subdir, source_label) for subdir, source_label in DEFAULT_GEMINI_SUBDIR_SPECS),
     ("~/.config/antigravity/conversations", "config"),
 ]
 
 
-def discover_databases(override_env: dict[str, str] | None = None) -> list[DiscoveredDatabase]:
+def _resolve_default_roots(env_source: Mapping[str, str]) -> list[tuple[Path, str]]:
+    """Resolve default conversation root directories, honoring GEMINI_HOME when set.
+
+    Args:
+        env_source (Mapping[str, str]): Environment variables mapping.
+
+    Returns:
+        list[tuple[Path, str]]: Ordered list of `(conversations_dir, source_label)` pairs.
+    """
+    gemini_home = env_source.get("GEMINI_HOME", "").strip()
+    if gemini_home:
+        gemini_base = Path(gemini_home).expanduser()
+        return [
+            *((gemini_base / subdir, source_label) for subdir, source_label in DEFAULT_GEMINI_SUBDIR_SPECS),
+            (Path("~/.config/antigravity/conversations").expanduser(), "config"),
+        ]
+
+    return [(Path(path_template).expanduser(), source_label) for path_template, source_label in DEFAULT_ROOT_SPECS]
+
+
+def discover_databases(override_env: Mapping[str, str] | None = None) -> list[DiscoveredDatabase]:
     """Discover AntiGravity SQLite conversation databases from environment or default locations.
 
     Args:
-        override_env (dict[str, str] | None, optional): Custom environment dict for testing.
+        override_env (Mapping[str, str] | None, optional): Custom environment mapping for testing.
             If None, `os.environ` is used. Defaults to None.
 
     Returns:
@@ -44,10 +70,9 @@ def discover_databases(override_env: dict[str, str] | None = None) -> list[Disco
             if target_dir is not None:
                 _scan_directory(target_dir, "env", discovered_by_canonical)
     else:
-        for path_template, source_label in DEFAULT_ROOT_SPECS:
-            p = Path(path_template).expanduser()
-            if p.is_dir():
-                _scan_directory(p, source_label, discovered_by_canonical)
+        for root_path, source_label in _resolve_default_roots(env_source):
+            if root_path.is_dir():
+                _scan_directory(root_path, source_label, discovered_by_canonical)
 
     sorted_candidates = sorted(
         discovered_by_canonical.values(),

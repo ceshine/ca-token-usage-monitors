@@ -32,6 +32,12 @@ def test_default_roots_mapping_and_priority(tmp_path: Path, monkeypatch: pytest.
     db3 = ide_root / "session3.db"
     db3.touch()
 
+    # Priority 4: acp (~/.gemini/antigravity-acp/conversations)
+    acp_root = home_dir / ".gemini" / "antigravity-acp" / "conversations"
+    acp_root.mkdir(parents=True)
+    db4 = acp_root / "session4.db"
+    db4.touch()
+
     monkeypatch.setenv("HOME", str(home_dir))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(config_dir))
 
@@ -41,6 +47,7 @@ def test_default_roots_mapping_and_priority(tmp_path: Path, monkeypatch: pytest.
     assert sources["session1.db"] == "default"
     assert sources["session2.db"] == "cli"
     assert sources["session3.db"] == "ide"
+    assert sources["session4.db"] == "acp"
 
 
 def test_missing_roots_ignored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -142,3 +149,56 @@ def test_symlink_deduplication_and_earliest_priority_label(tmp_path: Path, monke
     assert discovered[0].database_path == real_db.resolve()
     assert discovered[0].discovery_source == "default"
     assert discovered[0].session_id == "real_session"
+
+
+def test_gemini_home_overrides_all_gemini_roots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify GEMINI_HOME replaces ~/.gemini for all antigravity* roots when ANTIGRAVITY_DATA_DIR is absent."""
+    home_dir = tmp_path / "home"
+    default_acp = home_dir / ".gemini" / "antigravity-acp" / "conversations"
+    default_acp.mkdir(parents=True)
+    (default_acp / "ignored_home_session.db").touch()
+
+    custom_gemini = tmp_path / "custom_gemini"
+    for subdir, filename in [
+        ("antigravity/conversations", "s_default.db"),
+        ("antigravity-cli/conversations", "s_cli.db"),
+        ("antigravity-ide/conversations", "s_ide.db"),
+        ("antigravity-acp/conversations", "s_acp.db"),
+        ("antigravity-backup/conversations", "s_backup.db"),
+    ]:
+        target = custom_gemini / subdir
+        target.mkdir(parents=True)
+        (target / filename).touch()
+
+    monkeypatch.setenv("HOME", str(home_dir))
+
+    discovered = discover_databases(override_env={"GEMINI_HOME": str(custom_gemini)})
+    sources = {d.database_path.name: d.discovery_source for d in discovered}
+    assert sources == {
+        "s_default.db": "default",
+        "s_cli.db": "cli",
+        "s_ide.db": "ide",
+        "s_acp.db": "acp",
+        "s_backup.db": "backup",
+    }
+
+    # ANTIGRAVITY_DATA_DIR still takes precedence over GEMINI_HOME
+    env_dir = tmp_path / "override_env_dir"
+    env_dir.mkdir()
+    (env_dir / "s_env.db").touch()
+    env_discovered = discover_databases(
+        override_env={"GEMINI_HOME": str(custom_gemini), "ANTIGRAVITY_DATA_DIR": str(env_dir)}
+    )
+    assert [(d.database_path.name, d.discovery_source) for d in env_discovered] == [("s_env.db", "env")]
+
+
+def test_empty_gemini_home_falls_back_to_default_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify whitespace/empty GEMINI_HOME falls back to ~/.gemini."""
+    home_dir = tmp_path / "home"
+    acp_root = home_dir / ".gemini" / "antigravity-acp" / "conversations"
+    acp_root.mkdir(parents=True)
+    (acp_root / "home_acp.db").touch()
+    monkeypatch.setenv("HOME", str(home_dir))
+
+    discovered = discover_databases(override_env={"GEMINI_HOME": "   "})
+    assert [(d.database_path.name, d.discovery_source) for d in discovered] == [("home_acp.db", "acp")]

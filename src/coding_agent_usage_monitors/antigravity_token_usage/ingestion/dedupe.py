@@ -8,9 +8,10 @@ SOURCE_PRIORITY: dict[str, int] = {
     "default": 1,
     "cli": 2,
     "ide": 3,
-    "backup": 4,
-    "config": 5,
-    "env": 6,
+    "acp": 4,
+    "backup": 5,
+    "config": 6,
+    "env": 7,
 }
 
 
@@ -30,6 +31,8 @@ def get_identity_keys(event: RawUsageEvent) -> list[str]:
         keys.append(f"provider:{event.provider_assigned_message_id}")
     if event.message_id and event.message_id.strip():
         keys.append(f"message:{event.message_id}")
+    if not keys and event.request_key and (stripped_request_key := event.request_key.strip()):
+        keys.append(f"request:{event.session_id}:{stripped_request_key}")
     return keys
 
 
@@ -86,6 +89,8 @@ def merge_events(events: list[RawUsageEvent]) -> UsageEventRow:
         None,
     )
     message_id = next((e.message_id for e in events if e.message_id and e.message_id.strip()), None)
+    request_key = next((e.request_key.strip() for e in events if e.request_key and e.request_key.strip()), None)
+    session_id = best_source_event.session_id
 
     if response_id:
         event_key = f"response:{response_id}"
@@ -93,10 +98,10 @@ def merge_events(events: list[RawUsageEvent]) -> UsageEventRow:
         event_key = f"provider:{provider_assigned_message_id}"
     elif message_id:
         event_key = f"message:{message_id}"
+    elif request_key:
+        event_key = f"request:{session_id}:{request_key}"
     else:
         event_key = events[0].fallback_key
-
-    session_id = best_source_event.session_id
 
     return UsageEventRow(
         event_key=event_key,

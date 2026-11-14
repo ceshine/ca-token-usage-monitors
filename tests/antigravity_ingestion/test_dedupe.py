@@ -270,3 +270,105 @@ def test_timestamp_rank_precedence() -> None:
     assert len(merged) == 1
     # Rank 3 wins over rank 0 even though TS_LATE is later than TS_EARLY
     assert merged[0].event_timestamp == TS_LATE
+
+
+def test_request_key_fallback_deduplication_and_acp_priority() -> None:
+    """Verify request_key merges gen_metadata and steps without ModelUsage IDs and respects acp priority."""
+    gen_event = RawUsageEvent(
+        session_id="acp_sess_1",
+        discovery_source="acp",
+        event_timestamp=TS_EARLY,
+        timestamp_rank=3,
+        model_code="gemini-3.8-flash-high",
+        model_id=326,
+        provider_id=None,
+        input_tokens=100,
+        output_tokens=20,
+        reasoning_tokens=5,
+        total_output_tokens=25,
+        cache_creation_tokens=0,
+        cache_read_tokens=10,
+        total_tokens=135,
+        response_id=None,
+        provider_assigned_message_id=None,
+        message_id=None,
+        fallback_key="fallback:acp:gen:0:primary",
+        request_key="traj-1-0",
+    )
+    step_event = RawUsageEvent(
+        session_id="acp_sess_1",
+        discovery_source="backup",
+        event_timestamp=TS_LATE,
+        timestamp_rank=3,
+        model_code="gemini-3.8-flash-high",
+        model_id=326,
+        provider_id=None,
+        input_tokens=100,
+        output_tokens=20,
+        reasoning_tokens=5,
+        total_output_tokens=25,
+        cache_creation_tokens=0,
+        cache_read_tokens=10,
+        total_tokens=135,
+        response_id=None,
+        provider_assigned_message_id=None,
+        message_id=None,
+        fallback_key="fallback:acp:steps:1:primary",
+        request_key="traj-1-0",
+    )
+    other_session_event = RawUsageEvent(
+        session_id="acp_sess_2",
+        discovery_source="acp",
+        event_timestamp=TS_EARLY,
+        timestamp_rank=3,
+        model_code="gemini-3.8-flash-high",
+        model_id=326,
+        provider_id=None,
+        input_tokens=50,
+        output_tokens=10,
+        reasoning_tokens=0,
+        total_output_tokens=10,
+        cache_creation_tokens=0,
+        cache_read_tokens=0,
+        total_tokens=60,
+        response_id=None,
+        provider_assigned_message_id=None,
+        message_id=None,
+        fallback_key="fallback:acp2:gen:0:primary",
+        request_key="traj-1-0",
+    )
+    explicit_id_event = RawUsageEvent(
+        session_id="acp_sess_1",
+        discovery_source="acp",
+        event_timestamp=TS_EARLY,
+        timestamp_rank=3,
+        model_code="gemini-3.8-flash-high",
+        model_id=326,
+        provider_id=None,
+        input_tokens=80,
+        output_tokens=10,
+        reasoning_tokens=0,
+        total_output_tokens=10,
+        cache_creation_tokens=0,
+        cache_read_tokens=0,
+        total_tokens=90,
+        response_id="resp_explicit",
+        provider_assigned_message_id=None,
+        message_id=None,
+        fallback_key="fallback:acp:gen:1:primary",
+        request_key="traj-1-0",
+    )
+
+    assert get_identity_keys(gen_event) == ["request:acp_sess_1:traj-1-0"]
+    assert get_identity_keys(explicit_id_event) == ["response:resp_explicit"]
+
+    merged = deduplicate_events([step_event, gen_event, other_session_event, explicit_id_event])
+    assert len(merged) == 3
+    by_key = {row.event_key: row for row in merged}
+    assert set(by_key) == {
+        "request:acp_sess_1:traj-1-0",
+        "request:acp_sess_2:traj-1-0",
+        "response:resp_explicit",
+    }
+    assert by_key["request:acp_sess_1:traj-1-0"].discovery_source == "acp"
+    assert by_key["request:acp_sess_1:traj-1-0"].event_timestamp == TS_EARLY

@@ -30,24 +30,24 @@ Out of scope:
 ## 2. Finalized Product Decisions
 
 1. A dedicated canonical-event field, `discovery_source`, records where the source database was discovered.
-2. Supported source labels are `default`, `cli`, `ide`, `backup`, `config`, and `env`.
-3. A database located below `~/.gemini/antigravity-cli/conversations/` yields `discovery_source = 'cli'`.
+2. Supported source labels are `default`, `cli`, `ide`, `acp`, `backup`, `config`, and `env`.
+3. A database located below `~/.gemini/antigravity-cli/conversations/` yields `discovery_source = 'cli'`, and below `~/.gemini/antigravity-acp/conversations/` yields `discovery_source = 'acp'`.
 4. Discovery resolves every source database to a canonical path, deduplicates canonical paths, and processes them in deterministic order.
 5. If the same physical database is reachable through more than one root, the source label from the first matching root in discovery-priority order wins.
 6. Source database paths are transient implementation details. They are used for discovery, parsing, error messages, and fallback event-key creation, but are not stored in DuckDB.
 7. The ingestion run parses every currently discovered database. It then globally deduplicates all parsed events in memory.
 8. On a successful run, ingestion upserts the deduplicated canonical events into `antigravity_usage_events` in one DuckDB transaction (`update_all_events`). This preserves historical events when local source `.db` files are later cleaned up, while keeping existing conflicting `event_key` rows updated idempotently.
 9. No `antigravity_raw_usage_events` table is created. Existing provider ingestors persist usable canonical events directly and do not use raw-event staging tables.
-10. A duplicate event is identified by any documented non-empty identity key, in this preference order: response ID, provider-assigned message ID, then message ID.
-11. Events without any identity key are retained as distinct events. They cannot be safely cross-database deduplicated.
+10. A duplicate event is identified by any documented non-empty identity key, in this preference order: response ID, provider-assigned message ID, then message ID. When all three `ModelUsage` IDs are absent on a primary event (as observed in `antigravity-acp` databases), a session-scoped request key (`request:<session_id>:<request_id>`) derived from enclosing generator/step metadata links matching `gen_metadata` and `steps` records.
+11. Events without any identity key (including request key) are retained as distinct events. They cannot be safely cross-database deduplicated.
 12. When duplicates merge, every token counter takes the maximum observed value rather than being summed.
-13. Stored `discovery_source` for a merged event is selected by discovery priority: `default`, `cli`, `ide`, `backup`, `config`, then `env`.
+13. Stored `discovery_source` for a merged event is selected by discovery priority: `default`, `cli`, `ide`, `acp`, `backup`, `config`, then `env`.
 14. SQLite source files are always opened read-only.
 15. A malformed or unreadable database fails that database for the run but does not prevent processing other discovered databases. The DuckDB canonical event table is not updated (the upsert is aborted) if any database fails.
 16. Timestamp precedence follows the ccusage reference implementation: an explicit generator or step timestamp has rank `3`, a trajectory timestamp has rank `1`, and the source database modification time has rank `0`. Higher ranks win; equal ranks select the earlier timestamp.
-17. Retry usages follow ccusage behavior: parse every token-bearing retry as a candidate event, without inferring whether it represents a failed attempt. A retry sharing an identity with another event merges through normal identity-based deduplication; one with a distinct or absent identity remains a separate event.
+17. Retry usages follow ccusage behavior: parse every token-bearing retry as a candidate event, without inferring whether it represents a failed attempt. A retry sharing an identity with another event merges through normal identity-based deduplication; one with a distinct or absent identity remains a separate event, except that within the same row, an anonymous retry (lacking all `ModelUsage` IDs) whose raw token signature duplicates the primary or an earlier anonymous retry is suppressed as a redundant mirror.
 18. A deduplicated event stores exactly one `discovery_source`, selected by source priority. The initial implementation intentionally does not preserve every source location that contained a duplicate event.
-19. `ANTIGRAVITY_DATA_DIR` follows ccusage override semantics: when the environment variable is present, its comma-separated roots replace the five default roots entirely. The default roots are scanned only when the variable is absent.
+19. `ANTIGRAVITY_DATA_DIR` follows ccusage override semantics: when the environment variable is present, its comma-separated roots replace all default roots entirely. The default roots are scanned only when the variable is absent; when `ANTIGRAVITY_DATA_DIR` is absent and `GEMINI_HOME` is set and non-empty, `GEMINI_HOME` overrides `~/.gemini` for all `antigravity*` default roots.
 20. A missing primary `ModelUsage` is valid when retry usages are present. Parse and emit every token-bearing retry normally, inheriting enclosing metadata and timestamp fallback context; do not reject or skip the metadata solely because its primary usage field is absent.
 21. `session_id` is required for every persisted event and is derived from the source database filename stem. Do not substitute an `unknown` value; a discovered database without a usable non-empty filename stem is a per-database ingestion failure.
 22. Model-string normalization follows ccusage's `normalize_antigravity_model` rules exactly. Do not introduce generic provider-prefix stripping, punctuation rewriting, or version-suffix removal beyond those explicit rules.
@@ -99,10 +99,11 @@ Search the following conversation directories in this exact order:
 | 1 | `~/.gemini/antigravity/conversations/` | `default` |
 | 2 | `~/.gemini/antigravity-cli/conversations/` | `cli` |
 | 3 | `~/.gemini/antigravity-ide/conversations/` | `ide` |
-| 4 | `~/.gemini/antigravity-backup/conversations/` | `backup` |
-| 5 | `~/.config/antigravity/conversations/` | `config` |
+| 4 | `~/.gemini/antigravity-acp/conversations/` | `acp` |
+| 5 | `~/.gemini/antigravity-backup/conversations/` | `backup` |
+| 6 | `~/.config/antigravity/conversations/` | `config` |
 
-Missing roots are ignored.
+When `GEMINI_HOME` is set and non-empty (and `ANTIGRAVITY_DATA_DIR` is absent), it replaces `~/.gemini` as the base directory for priorities 1–5 (`antigravity`, `antigravity-cli`, `antigravity-ide`, `antigravity-acp`, and `antigravity-backup`). Missing roots are ignored.
 
 ### 4.2 `ANTIGRAVITY_DATA_DIR`
 
@@ -166,7 +167,7 @@ CREATE TABLE IF NOT EXISTS antigravity_usage_events (
 
 Notes:
 
-- `event_key` is deterministic for events having an identity: it uses the highest-preference identity key available (`response:`, then `provider:`, then `message:`).
+- `event_key` is deterministic for events having an identity: it uses the highest-preference identity key available (`response:`, then `provider:`, then `message:`, or `request:<session_id>:<request_key>` when `ModelUsage` lacks those three IDs).
 - An event without any identity receives an internal fallback key derived from the canonical source path, source table, source row index, and repeated-usage ordinal. The path itself is not stored.
 - `session_id` is required and is always the source database filename stem; a source database with no usable non-empty stem fails ingestion rather than storing a synthetic identifier.
 - `model_id` stores the raw numeric AntiGravity model ID alongside the normalized `model_code` so future model mapping updates can re-resolve model codes without needing original SQLite files on disk.
@@ -284,9 +285,10 @@ For each `gen_metadata.data` blob:
    - field `4` bytes: primary `ModelUsage`;
    - field `9` bytes: `GenerationInfo`, whose field `4` is a `TimestampMessage`;
    - field `17` repeated bytes: retry usages, where nested field `2` is a `ModelUsage`;
-   - field `19`, otherwise field `21`, string: raw model name.
-3. Emit one candidate event from the primary usage when it is token-bearing.
-4. Emit one candidate event for every token-bearing retry usage, inheriting model/provider/timestamp context when the retry usage lacks it. Do not infer a failure state or discard retry usages merely because they came from retry metadata.
+   - field `19` (primary slug) and field `21` (display name), strings: raw model name, preferring an effort-qualified display name when field `19` lacks an effort suffix;
+   - field `20` repeated bytes: key-value metadata entries (`field 1` key, `field 2` value) used to extract `request_id` (falling back to `<trajectory_id>-<gen_idx>`).
+3. Emit one candidate event from the primary usage when it is token-bearing (attaching the extracted `request_key` when all `ModelUsage` IDs are absent).
+4. Emit one candidate event for every token-bearing retry usage, inheriting model/provider/timestamp context when the retry usage lacks it, while suppressing intra-row anonymous retry duplicates whose raw token counters exactly mirror the primary or an earlier anonymous retry. Do not infer a failure state or discard distinct retry usages merely because they came from retry metadata.
 
 ### 8.2 Step metadata
 
@@ -297,9 +299,10 @@ For each `steps.metadata` blob:
 3. Read `model_info` from field `24`:
    - field `1` varint: model ID;
    - field `7` varint: provider;
-   - field `12`, otherwise field `8`, string: model name.
-4. Read field `28` repeated retry usages, with nested field `2` as `ModelUsage`.
-5. Emit token-bearing primary and retry candidate events following the same inheritance rules as generator metadata. Do not infer a failure state for retries.
+   - field `12` (primary slug) and field `8` (display name), strings: model name, preferring an effort-qualified display name when field `12` lacks an effort suffix.
+4. Read field `20` bytes (request reference: `field 1` `trajectory_id`, `field 3` `gen_idx` defaulting to `0`) to derive `<trajectory_id>-<gen_idx>` as `request_key` when `ModelUsage` IDs are absent.
+5. Read field `28` repeated retry usages, with nested field `2` as `ModelUsage`.
+6. Emit token-bearing primary and retry candidate events following the same inheritance and intra-row anonymous retry mirror suppression rules as generator metadata. Do not infer a failure state for retries.
 
 ### 8.3 Trajectory metadata
 
@@ -550,6 +553,8 @@ Base aliases are:
 | `gemini-pro-default`, `gemini-pro-agent` | `gemini-3.1-pro` |
 | `gemini-3-flash-agent`, `gemini-3-flash-agent-a`, `gemini-3-flash-agent-b`, `gemini-3-flash-a`, `gemini-3-flash-b` | `gemini-3.5-flash-high` |
 | `gemini-3-flash-c`, `gemini-3-flash` | `gemini-3-flash-preview` |
+| `gemini-3.8-flash-n` | `gemini-3.8-flash` |
+| `gemini-4-argon-trial` | `gemini-4-argon` |
 | `gemini-3.5-flash-low` | `gemini-3.5-flash-medium` |
 | `gemini-3.1-pro-high`, `gemini-3.1-pro-low` | `gemini-3.1-pro` |
 | `gemini-3-pro-high`, `gemini-3-pro-low` | `gemini-3-pro` |
@@ -577,6 +582,7 @@ For each candidate event, create every available non-empty identity key:
 1. `response:<response_id>`
 2. `provider:<provider_assigned_message_id>`
 3. `message:<message_id>`
+4. `request:<session_id>:<request_key>` (only when items 1–3 are all absent and `request_key` is present)
 
 The ordered list is used when selecting an `event_key`; all keys participate in duplicate matching.
 
@@ -649,8 +655,9 @@ Create `tests/antigravity_ingestion/`.
 
 ### 13.1 Discovery tests
 
-- Every default root maps to the correct `discovery_source`.
-- Files under `antigravity-cli/conversations` receive `cli`.
+- Every default root (including `antigravity-acp/conversations` as `acp`) maps to the correct `discovery_source`.
+- Files under `antigravity-cli/conversations` receive `cli`, and files under `antigravity-acp/conversations` receive `acp`.
+- `GEMINI_HOME` overrides `~/.gemini` for all `antigravity*` roots when `ANTIGRAVITY_DATA_DIR` is absent; empty/whitespace `GEMINI_HOME` falls back to `~/.gemini`.
 - Missing roots do not fail discovery.
 - Environment roots select `root/conversations` when present and `root` otherwise.
 - A present `ANTIGRAVITY_DATA_DIR` replaces default-root discovery; databases in default roots are not returned.
@@ -707,7 +714,8 @@ Build temporary SQLite databases in test fixtures using encoded wire-format blob
 
 ### 13.5 Deduplication tests
 
-- Deduplicate a generator and step event sharing each supported identity type.
+- Deduplicate a generator and step event sharing each supported identity type (including session-scoped `request_key` fallback when `ModelUsage` IDs are absent).
+- Verify anonymous retries mirroring primary/earlier retry token counters in the same row are suppressed, while distinct anonymous retries remain separate.
 - Verify a retry sharing an identity with its primary usage merges under the normal token-maximum rules.
 - Verify a token-bearing retry with a distinct or absent identity remains a separate event.
 - Deduplicate events across separate `cli` and `ide` databases.

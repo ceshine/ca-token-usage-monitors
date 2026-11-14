@@ -38,6 +38,7 @@ class RawUsageEvent:
     message_id: str | None
     fallback_key: str
     model_id: int | None = None
+    request_key: str | None = None
 
 
 @dataclass(frozen=True)
