@@ -44,6 +44,15 @@ uv sync --frozen
 
 ## Release Notes
 
+### 0.5.2
+
+- **AntiGravity ACP Session Discovery & `GEMINI_HOME` Override:**
+  - Added `~/.gemini/antigravity-acp/conversations/` (`"acp"` source) to `agy-token-usage` discovery alongside `"app"` and `"cli"`.
+  - Added `GEMINI_HOME` environment variable support to override the `~/.gemini` base directory across all `antigravity*` roots (`app`, `cli`, and `acp`).
+- **AntiGravity Anonymous Usage Deduplication & Model Normalization:**
+  - Fixed overcounting of ACP `ModelUsage` events lacking explicit IDs (`response_id`, `provider_assigned_message_id`, `message_id`) by suppressing intra-row anonymous retry mirrors and deduplicating `gen_metadata` vs `steps` rows via `request_key`.
+  - Added `"gemini-3.8-flash-n"` and `"gemini-4-argon-trial"` to `BASE_ALIASES`, and preferred effort-qualified model codes (e.g. `gemini-3.8-flash-high`) over unquantified codes while preserving canonical codes over human-readable display names.
+
 ### 0.5.1
 
 - **New AntiGravity Model Mappings & Pricing Normalization:**
